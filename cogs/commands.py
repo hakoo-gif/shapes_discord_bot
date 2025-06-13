@@ -231,8 +231,14 @@ class CommandsCog(commands.Cog):
                     ephemeral=True
                 )
                 return
+
+            if self._is_bot_owner(user.id):
+                await interaction.response.send_message(
+                    "❌ You cannot block/unblock the bot owner.",
+                    ephemeral=True
+                )
+                return
             
-            # Perform action
             if action.value == "block":
                 await self.bot.storage.block_user(interaction.guild.id, user.id)
                 embed = discord.Embed(
@@ -413,7 +419,7 @@ class ChannelSelectionView(discord.ui.View):
         self.list_type = list_type
         self.action = action
         
-        # Split channels into chunks of 25 (Discord limit)
+        # Split channels into chunks of 25
         channel_chunks = [channels[i:i+25] for i in range(0, len(channels), 25)]
         
         for i, chunk in enumerate(channel_chunks):
@@ -434,7 +440,7 @@ class ChannelDropdown(discord.ui.Select):
                 description=f"{channel.category.name if channel.category else 'No Category'}",
                 value=str(channel.id)
             )
-            for channel in channels[:25]  # Discord limit
+            for channel in channels[:25]
         ]
         
         placeholder = f"Select channel to {action}..."
@@ -492,7 +498,7 @@ class AuthView(discord.ui.View):
     """View for authentication process"""
     
     def __init__(self, auth_manager: AuthManager, user_id: int):
-        super().__init__(timeout=600)  # 10 minutes timeout
+        super().__init__(timeout=600)
         self.auth_manager = auth_manager
         self.user_id = user_id
         self.app_id = None
@@ -570,12 +576,12 @@ class AppIDModal(discord.ui.Modal):
                     raise ValueError("Invalid UUID format")
             except ValueError:
                 await interaction.response.send_message(
-                    "❌ Invalid App ID format! Please make sure it's a valid UUID **(XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX)**.",
+                    "❌ Invalid App ID format! Please make sure it's a valid UUID **`XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX`**.",
                     ephemeral=True
                 )
                 return
             
-            # Store app ID temporarily
+            # Store App ID temporarily
             await self.auth_view.set_app_id(app_id)
             
             # Generate auth URL
@@ -625,7 +631,6 @@ class AuthCodeModal(discord.ui.Modal):
                 )
                 return
             
-            # Show loading message
             await interaction.response.send_message(
                 "⏳ Processing your authorization...",
                 ephemeral=True
@@ -655,7 +660,6 @@ class AuthCodeModal(discord.ui.Modal):
                     color=discord.Color.red()
                 )
             
-            # Edit the original response
             await interaction.edit_original_response(content=None, embed=embed)
             
         except Exception as e:
