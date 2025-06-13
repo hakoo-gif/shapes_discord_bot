@@ -39,6 +39,9 @@ class AICog(commands.Cog):
         
         # Reply style configuration (1=reply with ping, 2=reply no ping, 3=direct message)
         self.reply_style = int(os.getenv('REPLY_STYLE', '1'))
+        
+        # Custom error message
+        self.custom_error_message = os.getenv('ERROR_MESSAGE', '').strip()
     
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -167,22 +170,20 @@ class AICog(commands.Cog):
             if response_text:
                 await self._send_response(message, response_text)
             else:
-                # Fallback response
-                if isinstance(message.channel, discord.DMChannel):
-                    await message.channel.send("I'm having trouble generating a response right now. Please try again later.")
-                else:
-                    await message.reply("I'm having trouble generating a response right now. Please try again later.")
+                error_msg = self.custom_error_message if self.custom_error_message else "I'm having trouble generating a response right now. Please try again later."
+                await self._send_error_message(message, error_msg)
                 
         except Exception as e:
             logger.error(f"Error handling AI response: {e}", exc_info=True)
-            try:
-                error_msg = "An error occurred while processing your message."
-                if isinstance(message.channel, discord.DMChannel):
-                    await message.channel.send(error_msg)
-                else:
-                    await message.reply(error_msg)
-            except:
-                pass
+            error_msg = self.custom_error_message if self.custom_error_message else "An error occurred while processing your message."
+            await self._send_error_message(message, error_msg)
+            
+    async def _send_error_message(self, original_message: discord.Message, error_msg: str):
+        """Send error message to the channel"""
+        try:
+            await original_message.channel.send(error_msg)
+        except Exception as e:
+            logger.error(f"Failed to send error message: {e}")
     
     async def _generate_ai_response(self, prompt: str, user_id: int, user_auth_data: Optional[Dict[str, str]], message: discord.Message, media_data: List[Dict] = None) -> Optional[str]:
         """Generate AI response using Shapes API"""
@@ -303,7 +304,7 @@ class AICog(commands.Cog):
                 cleaned_content = "I generated a response with files, but no text content."
             
             # Split long messages
-            message_chunks = self.response_processor.split_long_message(cleaned_content, 1900)  # Leave room for mentions
+            message_chunks = self.response_processor.split_long_message(cleaned_content, 1900)
             
             # Prepare files for attachment
             files = []
@@ -360,22 +361,8 @@ class AICog(commands.Cog):
                     
         except Exception as e:
             logger.error(f"Error sending response: {e}", exc_info=True)
-            try:
-                error_msg = "I generated a response but couldn't send it properly."
-                if isinstance(original_message.channel, discord.DMChannel):
-                    await original_message.channel.send(error_msg)
-                else:
-                    # Use reply style for error messages too
-                    if self.reply_style == 1:
-                        await original_message.reply(error_msg, mention_author=True)
-                    elif self.reply_style == 2:
-                        await original_message.reply(error_msg, mention_author=False)
-                    elif self.reply_style == 3:
-                        await original_message.channel.send(error_msg)
-                    else:
-                        await original_message.reply(error_msg, mention_author=True)
-            except:
-                pass
+            error_msg = self.custom_error_message if self.custom_error_message else "I generated a response but couldn't send it properly."
+            await self._send_error_message(original_message, error_msg)
     
     async def _download_shapes_files(self, file_urls: List[str]) -> List[discord.File]:
         """Download Shapes files and convert to Discord files"""
