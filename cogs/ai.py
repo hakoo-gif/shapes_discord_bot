@@ -36,6 +36,9 @@ class AICog(commands.Cog):
         
         # Cache for rate limit info
         self.rate_limit_cache = {}
+        
+        # Reply style configuration (1=reply with ping, 2=reply no ping, 3=direct message)
+        self.reply_style = int(os.getenv('REPLY_STYLE', '1'))
     
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -314,11 +317,22 @@ class AICog(commands.Cog):
                     current_files = files if i == 0 else []
                     
                     if isinstance(original_message.channel, discord.DMChannel):
-                        # In DMs, send directly
+                        # In DMs, always send directly
                         await original_message.channel.send(chunk, files=current_files)
                     else:
-                        # In guilds, reply to the message
-                        await original_message.reply(chunk, files=current_files, mention_author=False)
+                        # In guilds, use reply style configuration
+                        if self.reply_style == 1:
+                            # Reply with ping (default)
+                            await original_message.reply(chunk, files=current_files, mention_author=True)
+                        elif self.reply_style == 2:
+                            # Reply without ping
+                            await original_message.reply(chunk, files=current_files, mention_author=False)
+                        elif self.reply_style == 3:
+                            # Send direct message to channel
+                            await original_message.channel.send(chunk, files=current_files)
+                        else:
+                            # Fallback to default (reply with ping)
+                            await original_message.reply(chunk, files=current_files, mention_author=True)
                     
                     # Small delay between messages to avoid spam
                     if len(message_chunks) > 1 and i < len(message_chunks) - 1:
@@ -332,7 +346,15 @@ class AICog(commands.Cog):
                             if isinstance(original_message.channel, discord.DMChannel):
                                 await original_message.channel.send(chunk)
                             else:
-                                await original_message.reply(chunk, mention_author=False)
+                                # Use same reply style for fallback
+                                if self.reply_style == 1:
+                                    await original_message.reply(chunk, mention_author=True)
+                                elif self.reply_style == 2:
+                                    await original_message.reply(chunk, mention_author=False)
+                                elif self.reply_style == 3:
+                                    await original_message.channel.send(chunk)
+                                else:
+                                    await original_message.reply(chunk, mention_author=True)
                         except discord.HTTPException:
                             logger.error(f"Failed to send message chunk {i+1} even without files")
                     
@@ -343,7 +365,15 @@ class AICog(commands.Cog):
                 if isinstance(original_message.channel, discord.DMChannel):
                     await original_message.channel.send(error_msg)
                 else:
-                    await original_message.reply(error_msg)
+                    # Use reply style for error messages too
+                    if self.reply_style == 1:
+                        await original_message.reply(error_msg, mention_author=True)
+                    elif self.reply_style == 2:
+                        await original_message.reply(error_msg, mention_author=False)
+                    elif self.reply_style == 3:
+                        await original_message.channel.send(error_msg)
+                    else:
+                        await original_message.reply(error_msg, mention_author=True)
             except:
                 pass
     
