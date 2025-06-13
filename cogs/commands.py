@@ -202,12 +202,19 @@ class CommandsCog(commands.Cog):
                     action: app_commands.Choice[str]):
         """Block or unblock a user"""
         try:
-            # Check permissions (bot owner, admin, or manage server)
-            if not (self._is_bot_owner(interaction.user.id) or self._has_admin_permissions(interaction.user)):
-                await interaction.response.send_message(
-                    "❌ You need to be the bot owner, Administrator, or have Manage Server permissions to use this command.",
-                    ephemeral=True
-                )
+            # Check permissions (admin or manage server, plus optional bot owner)
+            has_admin_perms = self._has_admin_permissions(interaction.user)
+            is_owner = (hasattr(self.bot, 'bot_owner_id') and 
+                       self.bot.bot_owner_id is not None and 
+                       self._is_bot_owner(interaction.user.id))
+            
+            if not (has_admin_perms or is_owner):
+                if hasattr(self.bot, 'bot_owner_id') and self.bot.bot_owner_id is not None:
+                    error_msg = "❌ You need to be the bot owner, Administrator, or have Manage Server permissions to use this command."
+                else:
+                    error_msg = "❌ You need Administrator or Manage Server permissions to use this command."
+                
+                await interaction.response.send_message(error_msg, ephemeral=True)
                 return
             
             # Can't block/unblock self or bot
