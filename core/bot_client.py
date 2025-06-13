@@ -57,8 +57,12 @@ class ShapesBot(commands.Bot):
         # Bot configuration
         self.shapes_api_key = os.getenv('SHAPES_API_KEY')
         self.SHAPES_USERNAME = os.getenv('SHAPES_USERNAME')
-        self.bot_owner_id = int(os.getenv('BOT_OWNER', 0))
         self.trigger_words = [word.strip().lower() for word in os.getenv('TRIGGER_WORDS', '').split(',') if word.strip()]
+        bot_owner_env = os.getenv('BOT_OWNER')
+        try:
+            self.bot_owner_id = int(bot_owner_env) if bot_owner_env else None
+        except ValueError:
+            self.bot_owner_id = None
         
         # Debug logging
         logger.info(f"Bot configuration:")
