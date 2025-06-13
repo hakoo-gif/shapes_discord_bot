@@ -159,7 +159,7 @@ class AICog(commands.Cog):
             )
             
             # Generate AI response
-            response_text = await self._generate_ai_response(prompt, message.author.id, user_auth_data, media_data)
+            response_text = await self._generate_ai_response(prompt, message.author.id, user_auth_data, message, media_data)
             
             if response_text:
                 await self._send_response(message, response_text)
@@ -181,7 +181,7 @@ class AICog(commands.Cog):
             except:
                 pass
     
-    async def _generate_ai_response(self, prompt: str, user_id: int, user_auth_data: Optional[Dict[str, str]], media_data: List[Dict] = None) -> Optional[str]:
+    async def _generate_ai_response(self, prompt: str, user_id: int, user_auth_data: Optional[Dict[str, str]], message: discord.Message, media_data: List[Dict] = None) -> Optional[str]:
         """Generate AI response using Shapes API"""
         try:
             # Prepare messages
@@ -215,10 +215,12 @@ class AICog(commands.Cog):
                 headers["Authorization"] = "Bearer not-needed"
                 rate_limit_key = f"user_{user_id}"
             else:
-                # Use bot's default API key credentials
+                # Default headers for user/channel identification
                 headers = {
                     "Authorization": f"Bearer {self.bot.shapes_api_key}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "X-User-Id": str(user_id),
+                    "X-Channel-Id": str(message.channel.id)
                 }
                 rate_limit_key = "default"
             
