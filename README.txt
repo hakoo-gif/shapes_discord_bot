@@ -32,12 +32,13 @@
 
    BOT_OWNER=your_user_id
 
-   TRIGGER_WORDS=      # list of trigger words separated by comma
+   TRIGGER_WORDS=          # list of trigger words separated by comma
+   REPLY_STYLE=            # Reply style configuration (1=reply with ping, 2=reply no ping, 3=direct message)
 
    ## Bot Activity Configuration
-   STATUS=online       # online, idle, dnd, invisible
-   ACTIVITY_TYPE=none  # playing, streaming, listening, watching, competing, custom, none
-   ACTIVITY_MESSAGE=   # text displayed in the bot's activity status
+   STATUS=online           # online, idle, dnd, invisible
+   ACTIVITY_TYPE=none      # playing, streaming, listening, watching, competing, custom, none
+   ACTIVITY_MESSAGE=       # text displayed in the bot's activity status
    ```
 
 4. Replace the placeholder values with your actual Discord token, User ID, Shapes API key, and Shape username.
@@ -115,19 +116,21 @@ The bot using Shapes API prefix commands
 - Channel Modes
 - Trigger Words: The bot will respond to messages containing trigger words defined in the `.env` file
 - Custom Status
+- Custom reply style
 
 ## Configuration Options
 
 In your `.env` file, you can customize the following options:
 
-- `TRIGGER_WORDS`: Words that trigger the bot to respond (comma-separated)
-- `STATUS`: Bot's status display (online, idle, dnd, invisible)
-- `ACTIVITY_TYPE`: Activity type (playing, streaming, listening, watching, competing, custom, none)
+- `TRIGGER_WORDS`:    Words that trigger the bot to respond (comma-separated)
+- `REPLY_STYLE`:      Reply style configuration (1=reply with ping, 2=reply no ping, 3=direct message)
+- `STATUS`:           Bot's status display (online, idle, dnd, invisible)
+- `ACTIVITY_TYPE`:    Activity type (playing, streaming, listening, watching, competing, custom, none)
 - `ACTIVITY_MESSAGE`: Text displayed in the bot's activity status
 
 ## Troubleshooting
 
 - **Bot not responding**: Ensure you've set up the correct permissions and intents
-- **API errors**: Check your Shapes API key and username
-- **Rate limiting**: The bot will inform you if it's being rate limited by the API
-- **Logging**: Check the logs directory for detailed information about any errors
+- **API errors**:         Check your Shapes API key and username
+- **Rate limiting**:      The bot will inform you if it's being rate limited by the API
+- **Logging**:            Check the logs directory for detailed information about any errors
