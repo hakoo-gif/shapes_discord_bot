@@ -23,13 +23,14 @@
 
    ## Discord Bot Configuration
    BOT_TOKEN=your_discord_bot_token
-   BOT_OWNER=your_user_id
 
    ## Shapes API Configuration
    SHAPES_API_KEY=your_shapes_api_key
    SHAPE_USERNAME=your_shape_username
 
    # CUSTOMIZE
+
+   BOT_OWNER=your_user_id
 
    TRIGGER_WORDS=      # list of trigger words separated by comma
 
