@@ -1,0 +1,9 @@
+discord.py
+openai
+aiohttp
+aiofiles
+Pillow
+python-dotenv
+SpeechRecognition
+pydub
+requests
