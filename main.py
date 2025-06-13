@@ -25,7 +25,7 @@ async def main():
     bot = None
     try:
         # Validate required environment variables
-        required_vars = ['BOT_TOKEN', 'SHAPES_API_KEY', 'SHAPES_USERNAME', 'BOT_OWNER']
+        required_vars = ['BOT_TOKEN', 'SHAPES_API_KEY', 'SHAPES_USERNAME']
         missing_vars = [var for var in required_vars if not os.getenv(var)]
         
         if missing_vars:
