@@ -30,10 +30,13 @@
 
    # CUSTOMIZE
 
+   ## Discord Bot Configuration
    BOT_OWNER=your_user_id
-
-   TRIGGER_WORDS=          # list of trigger words separated by comma
    REPLY_STYLE=            # Reply style configuration (1=reply with ping, 2=reply no ping, 3=direct message)
+
+   ## Shapes Bot Configuration
+   TRIGGER_WORDS=          # list of trigger words separated by comma
+   ERROR_MESSAGE=          # Custom error message
 
    ## Bot Activity Configuration
    STATUS=online           # online, idle, dnd, invisible
@@ -115,15 +118,16 @@ The bot using Shapes API prefix commands
 - Image & Voice process (include sticker)
 - Channel Modes
 - Trigger Words: The bot will respond to messages containing trigger words defined in the `.env` file
-- Custom Status
-- Custom reply style
+- Custom Bot Status, Reply Style, Error Message
 
 ## Configuration Options
 
 In your `.env` file, you can customize the following options:
 
-- `TRIGGER_WORDS`:    Words that trigger the bot to respond (comma-separated)
+- `BOT_OWNER`:        Always have permission to block bot responding to someone
 - `REPLY_STYLE`:      Reply style configuration (1=reply with ping, 2=reply no ping, 3=direct message)
+- `TRIGGER_WORDS`:    Words that trigger the bot to respond (comma-separated)
+- `ERROR_MESSAGE`:    Custom error message when bot fail to get AI response
 - `STATUS`:           Bot's status display (online, idle, dnd, invisible)
 - `ACTIVITY_TYPE`:    Activity type (playing, streaming, listening, watching, competing, custom, none)
 - `ACTIVITY_MESSAGE`: Text displayed in the bot's activity status
