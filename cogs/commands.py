@@ -570,7 +570,7 @@ class AppIDModal(discord.ui.Modal):
                     raise ValueError("Invalid UUID format")
             except ValueError:
                 await interaction.response.send_message(
-                    "❌ Invalid App ID format! Please make sure it's a valid UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
+                    "❌ Invalid App ID format! Please make sure it's a valid UUID **(XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX)**.",
                     ephemeral=True
                 )
                 return
@@ -578,7 +578,7 @@ class AppIDModal(discord.ui.Modal):
             # Store app ID temporarily
             await self.auth_view.set_app_id(app_id)
             
-            # Generate auth URL (you'll need to implement this in your auth manager)
+            # Generate auth URL
             auth_url = f"https://shapes.inc/authorize?app_id={app_id}"
             
             embed = discord.Embed(
