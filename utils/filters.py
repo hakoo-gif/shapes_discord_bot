@@ -18,21 +18,61 @@ class TriggerFilter:
     """Handles trigger word filtering"""
     
     @staticmethod
+    def _find_url_ranges(text: str) -> List[tuple]:
+        """
+        Find all URL ranges in the text
+        
+        Args:
+            text: The text to search for URLs
+            
+        Returns:
+            List of tuples containing (start_index, end_index) for each URL
+        """
+        # Enhanced URL regex pattern to catch various URL formats
+        url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+|www\.[^\s<>"{}|\\^`\[\]]+|[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}(?:/[^\s<>"{}|\\^`\[\]]*)?'
+        
+        url_ranges = []
+        for match in re.finditer(url_pattern, text, re.IGNORECASE):
+            url_ranges.append((match.start(), match.end()))
+        
+        return url_ranges
+    
+    @staticmethod
+    def _is_in_url(position: int, url_ranges: List[tuple]) -> bool:
+        """
+        Check if a position is within any URL range
+        
+        Args:
+            position: The position to check
+            url_ranges: List of URL ranges
+            
+        Returns:
+            True if position is within a URL, False otherwise
+        """
+        for start, end in url_ranges:
+            if start <= position < end:
+                return True
+        return False
+    
+    @staticmethod
     def check_trigger_words(message_content: str, trigger_words: List[str]) -> bool:
         """
-        Check if message contains any trigger words using regex
+        Check if message contains any trigger words using regex, ignoring words in URLs
         
         Args:
             message_content: The message content to check
             trigger_words: List of trigger words
             
         Returns:
-            True if any trigger word is found, False otherwise
+            True if any trigger word is found (not in a URL), False otherwise
         """
         if not trigger_words or not message_content:
             return False
         
         message_lower = message_content.lower()
+        
+        # Find all URL ranges in the message
+        url_ranges = TriggerFilter._find_url_ranges(message_content)
         
         for trigger_word in trigger_words:
             if not trigger_word:
@@ -42,8 +82,10 @@ class TriggerFilter:
             # Use regex to match whole words only
             pattern = r'(?<![a-zA-Z0-9])' + re.escape(trigger_lower) + r'(?![a-zA-Z0-9])'
             
-            if re.search(pattern, message_lower):
-                return True
+            for match in re.finditer(pattern, message_lower):
+                # Check if this match is within a URL
+                if not TriggerFilter._is_in_url(match.start(), url_ranges):
+                    return True
         
         return False
 
