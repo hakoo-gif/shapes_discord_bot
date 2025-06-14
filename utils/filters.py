@@ -8,9 +8,8 @@ import speech_recognition as sr
 from pydub import AudioSegment
 import tempfile
 import os
+import base64
 from typing import List, Optional, Tuple, Dict, Any
-from transformers import BlipProcessor, BlipForConditionalGeneration
-import torch
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ class TriggerFilter:
         Returns:
             List of tuples containing (start_index, end_index) for each URL
         """
-        # Enhanced URL regex pattern to catch various URL formats
+        # URL regex pattern to catch various URL formats
         url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+|www\.[^\s<>"{}|\\^`\[\]]+|[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}(?:/[^\s<>"{}|\\^`\[\]]*)?'
         
         url_ranges = []
@@ -94,52 +93,46 @@ class MediaProcessor:
     
     def __init__(self):
         self.recognizer = sr.Recognizer()
-        self._blip_processor = None
-        self._blip_model = None
-        self._device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    def _get_blip_model(self):
-        """Lazy load BLIP model"""
-        if self._blip_processor is None or self._blip_model is None:
-            try:
-                logger.info("Loading BLIP model for image description...")
-                self._blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-                self._blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
-                self._blip_model.to(self._device)
-                logger.info(f"BLIP model loaded on {self._device}")
-            except Exception as e:
-                logger.error(f"Failed to load BLIP model: {e}")
-                self._blip_processor = None
-                self._blip_model = None
+        self.hf_api_url = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large"
+        self.hf_token = os.getenv('HUGGINGFACE_TOKEN', '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')
+    
+    async def describe_image(self, image_data: bytes) -> str:
+        """
+        Get description of image using Hugging Face API
         
-        return self._blip_processor, self._blip_model
-
-    async def _describe_image(self, image_data: bytes) -> str:
-        """Generate description for image using BLIP model"""
+        Args:
+            image_data: Image data as bytes
+            
+        Returns:
+            Description of the image
+        """
         try:
-            processor, model = self._get_blip_model()
-            if processor is None or model is None:
-                return "image"
+            if not self.hf_token:
+                logger.warning("No Hugging Face token provided, using basic image description")
+                return "an image"
             
-            # Open image
-            image = Image.open(io.BytesIO(image_data))
+            headers = {"Authorization": f"Bearer {self.hf_token}"}
             
-            # Convert to RGB if necessary
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
-            
-            # Process image and generate description
-            inputs = processor(image, return_tensors="pt").to(self._device)
-            
-            with torch.no_grad():
-                out = model.generate(**inputs, max_length=50, num_beams=5)
-            
-            description = processor.decode(out[0], skip_special_tokens=True)
-            return description
-            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    self.hf_api_url,
+                    headers=headers,
+                    data=image_data,
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        if isinstance(result, list) and len(result) > 0:
+                            description = result[0].get('generated_text', 'an image')
+                            return description.strip()
+                    else:
+                        logger.error(f"Hugging Face API error: {response.status}")
+                        
         except Exception as e:
-            logger.error(f"Error describing image: {e}")
-            return "image"
+            logger.error(f"Error describing image with HF API: {e}")
+        
+        # Fallback to basic description
+        return "an image"
     
     async def process_message_media(self, message: discord.Message) -> Tuple[str, List[Dict[str, Any]]]:
         """
@@ -227,23 +220,23 @@ class MediaProcessor:
                     if response.status == 200:
                         image_data = await response.read()
                         
-                        # Get image description
-                        description_text = await self._describe_image(image_data)
+                        # Get image description using AI
+                        description = await self.describe_image(image_data)
                         
-                        # Basic image analysis for metadata
+                        # Basic image analysis
                         with Image.open(io.BytesIO(image_data)) as img:
                             width, height = img.size
                             format_name = img.format
                             
-                        description = f"[Image showing: {description_text}]"
+                        text_description = f"[Image showing: {description}]"
                         
-                        return description, {
+                        return text_description, {
                             'type': 'image_url',
                             'image_url': {'url': attachment.url},
                             'filename': attachment.filename,
                             'size': f"{width}x{height}",
                             'format': format_name,
-                            'description': description_text
+                            'description': description
                         }
         except Exception as e:
             logger.error(f"Error processing image {attachment.filename}: {e}")
@@ -289,6 +282,17 @@ class MediaProcessor:
             # Try to get sticker image if it's available
             sticker_data = None
             if hasattr(sticker, 'url') and sticker.url:
+                # Try to describe sticker image
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(sticker.url) as response:
+                            if response.status == 200:
+                                image_data = await response.read()
+                                sticker_description = await self.describe_image(image_data)
+                                description = f"[Sticker '{sticker.name}' showing: {sticker_description}]"
+                except Exception as e:
+                    logger.debug(f"Could not describe sticker image: {e}")
+                
                 sticker_data = {
                     'type': 'image_url',
                     'image_url': {'url': sticker.url},
@@ -312,15 +316,15 @@ class MediaProcessor:
                     if response.status == 200:
                         image_data = await response.read()
                         
-                        # Get image description
-                        description_text = await self._describe_image(image_data)
+                        # Get AI description
+                        ai_description = await self.describe_image(image_data)
                         
                         with Image.open(io.BytesIO(image_data)) as img:
                             width, height = img.size
                             format_name = img.format
                         
                         filename = url.split('/')[-1] or "image"
-                        description = f"[Image showing: {description_text}]"
+                        description = f"[Image from URL showing: {ai_description}]"
                         
                         return description, {
                             'type': 'image_url',
@@ -328,7 +332,7 @@ class MediaProcessor:
                             'filename': filename,
                             'size': f"{width}x{height}",
                             'format': format_name,
-                            'description': description_text
+                            'description': ai_description
                         }
         except Exception as e:
             logger.error(f"Error processing image URL {url}: {e}")
@@ -434,7 +438,22 @@ class MediaProcessor:
                 description = f"[Sticker: {sticker.name}"
                 if hasattr(sticker, 'description') and sticker.description:
                     description += f" - {sticker.description}"
-                description += "]"
+                
+                # Try to get AI description of sticker
+                if hasattr(sticker, 'url') and sticker.url:
+                    try:
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(sticker.url) as response:
+                                if response.status == 200:
+                                    image_data = await response.read()
+                                    sticker_description = await self.describe_image(image_data)
+                                    description = f"[Sticker '{sticker.name}' showing: {sticker_description}]"
+                    except Exception as e:
+                        logger.debug(f"Could not describe sticker image: {e}")
+                        description += "]"
+                else:
+                    description += "]"
+                
                 text_parts.append(description)
             except Exception as e:
                 logger.error(f"Error processing sticker {sticker.name} for context: {e}")
@@ -460,17 +479,17 @@ class MediaProcessor:
         return " ".join(text_parts)
     
     async def _get_image_description_for_context(self, attachment: discord.Attachment) -> str:
-        """Get image description for context"""
+        """Get AI-powered image description for context"""
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(attachment.url) as response:
                     if response.status == 200:
                         image_data = await response.read()
                         
-                        # Get image description
-                        description_text = await self._describe_image(image_data)
+                        # Get AI description
+                        description = await self.describe_image(image_data)
                         
-                        return f"[Image showing: {description_text}]"
+                        return f"[Image showing: {description}]"
         except Exception as e:
             logger.error(f"Error getting image description for context {attachment.filename}: {e}")
         
@@ -497,17 +516,17 @@ class MediaProcessor:
         return f"[Audio: {attachment.filename}]"
     
     async def _get_image_url_description_for_context(self, url: str) -> str:
-        """Get image URL description for context"""
+        """Get image URL description for context with AI"""
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as response:
                     if response.status == 200:
                         image_data = await response.read()
                         
-                        # Get image description
-                        description_text = await self._describe_image(image_data)
+                        # Get AI description
+                        description = await self.describe_image(image_data)
                         
-                        return f"[Image showing: {description_text}]"
+                        return f"[Image from URL showing: {description}]"
         except Exception as e:
             logger.error(f"Error getting image URL description for context {url}: {e}")
         
