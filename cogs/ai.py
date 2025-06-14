@@ -83,7 +83,7 @@ class AICog(commands.Cog):
         try:
             # Always respond in DMs
             if isinstance(message.channel, discord.DMChannel):
-                # logger.info(f"DM channel - responding")
+                logger.info(f"DM channel - responding")
                 return True
             
             # Check guild settings
@@ -140,10 +140,10 @@ class AICog(commands.Cog):
             # Build message content with media processing
             message_content = message.content or ""
             media_description, media_data = await self.media_processor.process_message_media(message)
-
+            
             if media_description:
                 message_content = f"{message_content} {media_description}".strip()
-
+            
             # Process replied message media if it exists
             replied_media_description = ""
             replied_media_data = []
@@ -151,9 +151,7 @@ class AICog(commands.Cog):
                 replied_msg = message.reference.resolved
                 replied_media_description, replied_media_data = await self.media_processor.process_message_media(replied_msg)
                 if replied_media_description:
-                    # Add to message content for context
-                    replied_content = replied_msg.content[:50] + "..." if len(replied_msg.content) > 50 else replied_msg.content
-                    message_content = f"[Replying to {replied_msg.author.display_name}: {replied_content} {replied_media_description}] {message_content}".strip()
+                    message_content = f"{message_content} [Referenced message media: {replied_media_description}]".strip()
             
             # Combine media data
             all_media_data = media_data + replied_media_data
@@ -170,10 +168,12 @@ class AICog(commands.Cog):
             is_ping = (self.bot.user in message.mentions and 
                       not message.content.replace(f'<@{self.bot.user.id}>', '').replace(f'<@!{self.bot.user.id}>', '').strip())
             
+            current_message_formatted = f"{message.author.display_name}: {message_content}"
+            
             # Build prompt
             prompt = ContextManager.build_prompt(
                 context_messages=context_messages,
-                current_message=message_content,
+                current_message=current_message_formatted,
                 current_user=message.author.display_name,
                 current_user_id=str(message.author.id),
                 is_ping=is_ping
