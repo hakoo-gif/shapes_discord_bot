@@ -83,7 +83,7 @@ class AICog(commands.Cog):
         try:
             # Always respond in DMs
             if isinstance(message.channel, discord.DMChannel):
-                logger.info(f"DM channel - responding")
+                # logger.info(f"DM channel - responding")
                 return True
             
             # Check guild settings
