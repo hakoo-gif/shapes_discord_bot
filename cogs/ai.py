@@ -83,7 +83,7 @@ class AICog(commands.Cog):
         try:
             # Always respond in DMs
             if isinstance(message.channel, discord.DMChannel):
-                logger.info(f"DM channel - responding")
+                # logger.info(f"DM channel - responding")
                 return True
             
             # Check guild settings
@@ -141,46 +141,63 @@ class AICog(commands.Cog):
             message_content = message.content or ""
             media_description, media_data = await self.media_processor.process_message_media(message)
             
-            if media_description:
-                message_content = f"{message_content} {media_description}".strip()
+            # Build current message with consistent format
+            current_message_parts = []
             
-            # Process replied message media if it exists
-            replied_media_description = ""
-            replied_media_data = []
+            # Add reply context if this message is a reply
             if message.reference and message.reference.resolved:
                 replied_msg = message.reference.resolved
+                replied_content = replied_msg.content or ""
+                
+                # Process replied message media
                 replied_media_description, replied_media_data = await self.media_processor.process_message_media(replied_msg)
+                
+                # Build replied message text
+                replied_text = replied_content
                 if replied_media_description:
-                    message_content = f"{message_content} [Referenced message media: {replied_media_description}]".strip()
+                    replied_text = f"{replied_text} {replied_media_description}".strip()
+                
+                # Add reply context with truncation
+                replied_text_truncated = replied_text[:50] + "..." if len(replied_text) > 50 else replied_text
+                current_message_parts.append(f"[Replying to {replied_msg.author.display_name}: {replied_text_truncated}]")
+                
+                # Add replied media to media data
+                media_data.extend(replied_media_data)
             
-            # Combine media data
-            all_media_data = media_data + replied_media_data
+            # Add main message content
+            if message_content:
+                current_message_parts.append(message_content)
+            
+            # Add media description
+            if media_description:
+                current_message_parts.append(media_description)
+            
+            # Combine all parts
+            formatted_current_message = " ".join(current_message_parts)
             
             # Build context
             context_messages = await ContextManager.get_channel_context(
                 channel=message.channel,
                 bot_user_id=self.bot.user.id,
                 target_message=message,
-                media_processor=self.media_processor  # Pass media processor for context
+                media_processor=self.media_processor
             )
             
             # Determine if user just pinged the bot
             is_ping = (self.bot.user in message.mentions and 
                       not message.content.replace(f'<@{self.bot.user.id}>', '').replace(f'<@!{self.bot.user.id}>', '').strip())
             
-            current_message_formatted = f"{message.author.display_name}: {message_content}"
-            
             # Build prompt
             prompt = ContextManager.build_prompt(
                 context_messages=context_messages,
-                current_message=current_message_formatted,
+                current_message=formatted_current_message,
                 current_user=message.author.display_name,
                 current_user_id=str(message.author.id),
                 is_ping=is_ping
             )
             
             # Generate AI response
-            response_text = await self._generate_ai_response(prompt, message.author.id, user_auth_data, message, all_media_data)
+            response_text = await self._generate_ai_response(prompt, message.author.id, user_auth_data, message, media_data)
             
             if response_text:
                 await self._send_response(message, response_text)
@@ -192,6 +209,121 @@ class AICog(commands.Cog):
             logger.error(f"Error handling AI response: {e}", exc_info=True)
             error_msg = self.custom_error_message if self.custom_error_message else "An error occurred while processing your message."
             await self._send_error_message(message, error_msg)
+
+    async def _generate_ai_response(self, prompt: str, user_id: int, user_auth_data: Optional[Dict[str, str]], message: discord.Message, media_data: List[Dict] = None) -> Optional[str]:
+        """Generate AI response using Shapes API"""
+        try:
+            # Prepare messages
+            messages = [{"role": "user", "content": prompt}]
+            
+            # Add image data if present
+            if media_data:
+                for media in media_data:
+                    if media.get('type') == 'image_base64':
+                        # Add image description prompt
+                        image_prompt = f"Please describe this image in detail: [Image: {media.get('filename', 'image')}]"
+                        messages.append({
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": image_prompt},
+                                {
+                                    "type": "image_url", 
+                                    "image_url": {
+                                        "url": f"data:{media['mime_type']};base64,{media['data']}"
+                                    }
+                                }
+                            ]
+                        })
+                    elif media.get('type') == 'audio_url' and media.get('transcription'):
+                        messages.append({
+                            "role": "user", 
+                            "content": f"[Audio transcription: {media['transcription']}]"
+                        })
+            
+            # Prepare headers and rate limit key
+            if user_auth_data and user_auth_data.get('app_id') and user_auth_data.get('auth_token'):
+                # User has auth data, use their credentials
+                headers = self.auth_manager.create_headers_for_user(
+                    user_auth_data['app_id'], 
+                    user_auth_data['auth_token']
+                )
+                # Set API key to "not-needed" when using user auth
+                headers["Authorization"] = "Bearer not-needed"
+                rate_limit_key = f"user_{user_id}"
+            else:
+                # Default headers for user/channel identification
+                headers = {
+                    "Authorization": f"Bearer {self.bot.shapes_api_key}",
+                    "Content-Type": "application/json",
+                    "X-User-Id": str(user_id),
+                    "X-Channel-Id": str(message.channel.id)
+                }
+                rate_limit_key = "default"
+            
+            # Check rate limits
+            if self.rate_limiter.is_api_rate_limited(rate_limit_key):
+                wait_time = self.rate_limiter.get_api_rate_limit_wait(rate_limit_key)
+                logger.warning(f"Rate limited for {rate_limit_key}, waiting {wait_time:.1f}s")
+                return f"I'm being rate limited. Please try again in {wait_time:.1f} seconds."
+            
+            # Prepare payload
+            payload = {
+                "model": f"shapesinc/{self.bot.SHAPES_USERNAME}",
+                "messages": messages
+            }
+            
+            # Make API request
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.shapes_api_url, json=payload, headers=headers) as response:
+                    # Handle rate limiting
+                    if response.status == 429:
+                        reset_time = float(response.headers.get('X-RateLimit-Reset-Time', 0))
+                        remaining = int(response.headers.get('X-Ratelimit-Remaining', 0))
+                        
+                        if reset_time > 0:
+                            import time
+                            wait_time = reset_time - time.time()
+                            self.rate_limiter.set_api_rate_limit(rate_limit_key, reset_time, remaining)
+                            return f"I'm being rate limited. Please try again in {wait_time:.1f} seconds."
+                        else:
+                            return "I'm currently rate limited. Please try again in a moment."
+                    
+                    # Handle other errors
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"Shapes API error {response.status}: {error_text}")
+                        
+                        if response.status == 401:
+                            if user_auth_data:
+                                # Remove invalid auth token
+                                await self.auth_manager.remove_user_auth_token(user_id)
+                                return "Your authentication has expired. Please use `/auth` to re-authenticate."
+                            else:
+                                return "Authentication error. Please check that your Shapes API key is valid."
+                        elif response.status == 403:
+                            return "Access forbidden. Please check your permissions."
+                        else:
+                            return f"API error ({response.status}). Please try again later."
+                    
+                    # Parse successful response
+                    data = await response.json()
+                    
+                    if 'choices' in data and len(data['choices']) > 0:
+                        content = data['choices'][0]['message']['content']
+                        return content.strip()
+                    else:
+                        logger.error(f"Unexpected API response format: {data}")
+                        return "Received an unexpected response from the API."
+                        
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error calling Shapes API: {e}")
+            return "Network error. Please try again later."
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse API response: {e}")
+            return "Failed to parse API response. Please try again later."
+        except Exception as e:
+            logger.error(f"Error generating AI response: {e}", exc_info=True)
+            return "An error occurred while generating the response."
             
     async def _send_error_message(self, original_message: discord.Message, error_msg: str):
         """Send error message to the channel"""
