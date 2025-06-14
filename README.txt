@@ -19,24 +19,22 @@
 
 3. Create a `.env` file in the root directory with the following content:
    ```
-   # REQUIRED
-
+   #=========REQUIRED=========
    ## Discord Bot Configuration
-   BOT_TOKEN=your_discord_bot_token
+   BOT_TOKEN=              # your discord bot TOKEN
 
    ## Shapes API Configuration
-   SHAPES_API_KEY=your_shapes_api_key
-   SHAPE_USERNAME=your_shape_username
+   SHAPES_API_KEY=         # your shapes API key
+   SHAPE_USERNAME=         # your shape username (the vanity name after https://shapes.inc/)
 
-   # CUSTOMIZE
-
+   #=========CUSTOMIZE=========
    ## Discord Bot Configuration
-   BOT_OWNER=your_user_id
-   REPLY_STYLE=            # Reply style configuration (1=reply with ping, 2=reply no ping, 3=direct message)
+   BOT_OWNER=              # your user ID, used for permission to block bot responding to someone
+   REPLY_STYLE=            # reply style configuration (1=reply with ping, 2=reply no ping, 3=direct message)
 
    ## Shapes Bot Configuration
-   TRIGGER_WORDS=          # list of trigger words separated by comma
-   ERROR_MESSAGE=          # Custom error message
+   TRIGGER_WORDS=          # list of words that trigger the bot to respond (comma-separated)
+   ERROR_MESSAGE=          # custom error message when bot fail to get AI response
 
    ## Bot Activity Configuration
    STATUS=online           # online, idle, dnd, invisible
@@ -103,14 +101,14 @@ The bot provides slash commands:
 ### Prefix Commands
 The bot using Shapes API prefix commands
 
-!help - Display a list of available commands and their descriptions.
-!wack - Reset conversation history with the shape.
-!reset - Completely reset the shape's memory and conversation history.
-!sleep - Save your conversation to long-term memory.
-!info - Display debug information about the shape.
+!help      - Display a list of available commands and their descriptions.
+!wack      - Reset conversation history with the shape.
+!reset     - Completely reset the shape's memory and conversation history.
+!sleep     - Save your conversation to long-term memory.
+!info      - Display debug information about the shape.
 !dashboard - Get a link to edit your shape on the dashboard.
-!imagine - Generate an image based on your description.
-!web - Include results from Internet search in the response.
+!imagine   - Generate an image based on your description.
+!web       - Include results from Internet search in the response.
 
 ### Capabilities
 - AI chat: Responds to messages using Shapes Inc
@@ -120,21 +118,9 @@ The bot using Shapes API prefix commands
 - Trigger Words: The bot will respond to messages containing trigger words defined in the `.env` file
 - Custom Bot Status, Reply Style, Error Message
 
-## Configuration Options
-
-In your `.env` file, you can customize the following options:
-
-- `BOT_OWNER`:        Always have permission to block bot responding to someone
-- `REPLY_STYLE`:      Reply style configuration (1=reply with ping, 2=reply no ping, 3=direct message)
-- `TRIGGER_WORDS`:    Words that trigger the bot to respond (comma-separated)
-- `ERROR_MESSAGE`:    Custom error message when bot fail to get AI response
-- `STATUS`:           Bot's status display (online, idle, dnd, invisible)
-- `ACTIVITY_TYPE`:    Activity type (playing, streaming, listening, watching, competing, custom, none)
-- `ACTIVITY_MESSAGE`: Text displayed in the bot's activity status
-
 ## Troubleshooting
 
 - **Bot not responding**: Ensure you've set up the correct permissions and intents
-- **API errors**:         Check your Shapes API key and username
-- **Rate limiting**:      The bot will inform you if it's being rate limited by the API
-- **Logging**:            Check the logs directory for detailed information about any errors
+- **API errors**: Check your Shapes API key and username
+- **Rate limiting**: The bot will inform you if it's being rate limited by the API
+- **Logging**: Check the logs directory for detailed information about any errors
