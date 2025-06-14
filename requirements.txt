@@ -7,4 +7,3 @@ python-dotenv
 SpeechRecognition
 pydub
 requests
-base64
