@@ -93,7 +93,7 @@ class MediaProcessor:
     
     def __init__(self):
         self.recognizer = sr.Recognizer()
-        self.hf_api_url = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large"
+        self.hf_api_url = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-base"
         self.hf_token = os.getenv('HUGGINGFACE_TOKEN', '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')
     
     async def describe_image(self, image_data: bytes) -> str:
