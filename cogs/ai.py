@@ -144,11 +144,24 @@ class AICog(commands.Cog):
             if media_description:
                 message_content = f"{message_content} {media_description}".strip()
             
+            # Process replied message media if it exists
+            replied_media_description = ""
+            replied_media_data = []
+            if message.reference and message.reference.resolved:
+                replied_msg = message.reference.resolved
+                replied_media_description, replied_media_data = await self.media_processor.process_message_media(replied_msg)
+                if replied_media_description:
+                    message_content = f"{message_content} [Referenced message media: {replied_media_description}]".strip()
+            
+            # Combine media data
+            all_media_data = media_data + replied_media_data
+            
             # Build context
             context_messages = await ContextManager.get_channel_context(
                 channel=message.channel,
                 bot_user_id=self.bot.user.id,
-                target_message=message
+                target_message=message,
+                media_processor=self.media_processor  # Pass media processor for context
             )
             
             # Determine if user just pinged the bot
@@ -165,7 +178,7 @@ class AICog(commands.Cog):
             )
             
             # Generate AI response
-            response_text = await self._generate_ai_response(prompt, message.author.id, user_auth_data, message, media_data)
+            response_text = await self._generate_ai_response(prompt, message.author.id, user_auth_data, message, all_media_data)
             
             if response_text:
                 await self._send_response(message, response_text)
