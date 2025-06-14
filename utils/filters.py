@@ -93,46 +93,78 @@ class MediaProcessor:
     
     def __init__(self):
         self.recognizer = sr.Recognizer()
-        self.hf_api_url = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-base"
-        self.hf_token = os.getenv('HUGGINGFACE_TOKEN', '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')
+        self.supported_formats = ['.png', '.jpg', '.jpeg', '.webp', '.gif']
     
-    async def describe_image(self, image_data: bytes) -> str:
-        """
-        Get description of image using Hugging Face API
-        
-        Args:
-            image_data: Image data as bytes
-            
-        Returns:
-            Description of the image
-        """
+    def _is_image(self, attachment):
+        """Check if an attachment is a supported image format."""
+        return any(attachment.filename.lower().endswith(ext) for ext in self.supported_formats)
+    
+    async def _process_image_to_base64(self, attachment):
+        """Process an image attachment into base64 format."""
         try:
-            if not self.hf_token:
-                logger.warning("No Hugging Face token provided, using basic image description")
-                return "an image"
+            # Download the image
+            image_data = await attachment.read()
             
-            headers = {"Authorization": f"Bearer {self.hf_token}"}
+            # Get the MIME type based on file extension
+            file_ext = attachment.filename.lower()
+            if file_ext.endswith('.png'):
+                mime_type = 'image/png'
+            elif file_ext.endswith('.jpg') or file_ext.endswith('.jpeg'):
+                mime_type = 'image/jpeg'
+            elif file_ext.endswith('.webp'):
+                mime_type = 'image/webp'
+            elif file_ext.endswith('.gif'):
+                mime_type = 'image/gif'
+            else:
+                # Default mime type if not specifically matched
+                mime_type = 'image/jpeg'
             
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.hf_api_url,
-                    headers=headers,
-                    data=image_data,
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        if isinstance(result, list) and len(result) > 0:
-                            description = result[0].get('generated_text', 'an image')
-                            return description.strip()
-                    else:
-                        logger.error(f"Hugging Face API error: {response.status}")
-                        
+            # Convert to base64
+            base64_data = base64.b64encode(image_data).decode('utf-8')
+            
+            return {
+                'data': base64_data,
+                'mime_type': mime_type,
+                'filename': attachment.filename
+            }
         except Exception as e:
-            logger.error(f"Error describing image with HF API: {e}")
-        
-        # Fallback to basic description
-        return "an image"
+            logger.error(f"Error processing image: {str(e)}")
+            return None
+    
+    async def _process_image_url_to_base64(self, url: str):
+        """Process an image URL into base64 format."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        image_data = await response.read()
+                        
+                        # Get filename and determine MIME type
+                        filename = url.split('/')[-1] or "image"
+                        file_ext = filename.lower()
+                        
+                        if file_ext.endswith('.png'):
+                            mime_type = 'image/png'
+                        elif file_ext.endswith('.jpg') or file_ext.endswith('.jpeg'):
+                            mime_type = 'image/jpeg'
+                        elif file_ext.endswith('.webp'):
+                            mime_type = 'image/webp'
+                        elif file_ext.endswith('.gif'):
+                            mime_type = 'image/gif'
+                        else:
+                            mime_type = 'image/jpeg'
+                        
+                        # Convert to base64
+                        base64_data = base64.b64encode(image_data).decode('utf-8')
+                        
+                        return {
+                            'data': base64_data,
+                            'mime_type': mime_type,
+                            'filename': filename
+                        }
+        except Exception as e:
+            logger.error(f"Error processing image URL {url}: {e}")
+            return None
     
     async def process_message_media(self, message: discord.Message) -> Tuple[str, List[Dict[str, Any]]]:
         """
@@ -151,12 +183,19 @@ class MediaProcessor:
         for attachment in message.attachments:
             try:
                 if attachment.content_type:
-                    if attachment.content_type.startswith('image/'):
-                        text, data = await self._process_image_attachment(attachment)
-                        if text:
-                            text_parts.append(text)
-                        if data:
-                            media_data.append(data)
+                    if attachment.content_type.startswith('image/') and self._is_image(attachment):
+                        # Process image for API
+                        image_base64 = await self._process_image_to_base64(attachment)
+                        if image_base64:
+                            text_parts.append(f"[Image: {attachment.filename}]")
+                            media_data.append({
+                                'type': 'image_base64',
+                                'data': image_base64['data'],
+                                'mime_type': image_base64['mime_type'],
+                                'filename': image_base64['filename']
+                            })
+                        else:
+                            text_parts.append(f"[Image: {attachment.filename} (failed to process)]")
                     
                     elif attachment.content_type.startswith('audio/'):
                         text, data = await self._process_audio_attachment(attachment)
@@ -194,11 +233,17 @@ class MediaProcessor:
             for url in urls:
                 try:
                     if any(ext in url.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
-                        text, data = await self._process_image_url(url)
-                        if text:
-                            text_parts.append(text)
-                        if data:
-                            media_data.append(data)
+                        image_base64 = await self._process_image_url_to_base64(url)
+                        if image_base64:
+                            text_parts.append(f"[Image from URL: {image_base64['filename']}]")
+                            media_data.append({
+                                'type': 'image_base64',
+                                'data': image_base64['data'],
+                                'mime_type': image_base64['mime_type'],
+                                'filename': image_base64['filename']
+                            })
+                        else:
+                            text_parts.append(f"[Image from URL (failed to process)]")
                     
                     elif any(ext in url.lower() for ext in ['.mp3', '.wav', '.ogg', '.m4a']):
                         text, data = await self._process_audio_url(url)
@@ -220,23 +265,19 @@ class MediaProcessor:
                     if response.status == 200:
                         image_data = await response.read()
                         
-                        # Get image description using AI
-                        description = await self.describe_image(image_data)
-                        
                         # Basic image analysis
                         with Image.open(io.BytesIO(image_data)) as img:
                             width, height = img.size
                             format_name = img.format
                             
-                        text_description = f"[Image showing: {description}]"
+                        description = f"[Image: {attachment.filename} ({width}x{height}, {format_name})]"
                         
-                        return text_description, {
+                        return description, {
                             'type': 'image_url',
                             'image_url': {'url': attachment.url},
                             'filename': attachment.filename,
                             'size': f"{width}x{height}",
-                            'format': format_name,
-                            'description': description
+                            'format': format_name
                         }
         except Exception as e:
             logger.error(f"Error processing image {attachment.filename}: {e}")
@@ -282,17 +323,6 @@ class MediaProcessor:
             # Try to get sticker image if it's available
             sticker_data = None
             if hasattr(sticker, 'url') and sticker.url:
-                # Try to describe sticker image
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(sticker.url) as response:
-                            if response.status == 200:
-                                image_data = await response.read()
-                                sticker_description = await self.describe_image(image_data)
-                                description = f"[Sticker '{sticker.name}' showing: {sticker_description}]"
-                except Exception as e:
-                    logger.debug(f"Could not describe sticker image: {e}")
-                
                 sticker_data = {
                     'type': 'image_url',
                     'image_url': {'url': sticker.url},
@@ -316,23 +346,19 @@ class MediaProcessor:
                     if response.status == 200:
                         image_data = await response.read()
                         
-                        # Get AI description
-                        ai_description = await self.describe_image(image_data)
-                        
                         with Image.open(io.BytesIO(image_data)) as img:
                             width, height = img.size
                             format_name = img.format
                         
                         filename = url.split('/')[-1] or "image"
-                        description = f"[Image from URL showing: {ai_description}]"
+                        description = f"[Image from URL: {filename} ({width}x{height})]"
                         
                         return description, {
                             'type': 'image_url',
                             'image_url': {'url': url},
                             'filename': filename,
                             'size': f"{width}x{height}",
-                            'format': format_name,
-                            'description': ai_description
+                            'format': format_name
                         }
         except Exception as e:
             logger.error(f"Error processing image URL {url}: {e}")
@@ -399,158 +425,6 @@ class MediaProcessor:
         except Exception as e:
             logger.debug(f"Audio transcription failed for {filename}: {e}")
             return None
-
-    async def process_message_media_for_context(self, message: discord.Message) -> str:
-        """
-        Process media in a message for context purposes (text description only)
-        
-        Args:
-            message: Discord message object
-            
-        Returns:
-            Text description of media content
-        """
-        text_parts = []
-        
-        # Process attachments
-        for attachment in message.attachments:
-            try:
-                if attachment.content_type:
-                    if attachment.content_type.startswith('image/'):
-                        text = await self._get_image_description_for_context(attachment)
-                        if text:
-                            text_parts.append(text)
-                    
-                    elif attachment.content_type.startswith('audio/'):
-                        text = await self._get_audio_description_for_context(attachment)
-                        if text:
-                            text_parts.append(text)
-                    
-                    elif attachment.content_type.startswith('video/'):
-                        text_parts.append(f"[Video file: {attachment.filename}]")
-            except Exception as e:
-                logger.error(f"Error processing attachment {attachment.filename} for context: {e}")
-                text_parts.append(f"[Unable to process {attachment.filename}]")
-        
-        # Process stickers
-        for sticker in message.stickers:
-            try:
-                description = f"[Sticker: {sticker.name}"
-                if hasattr(sticker, 'description') and sticker.description:
-                    description += f" - {sticker.description}"
-                
-                # Try to get AI description of sticker
-                if hasattr(sticker, 'url') and sticker.url:
-                    try:
-                        async with aiohttp.ClientSession() as session:
-                            async with session.get(sticker.url) as response:
-                                if response.status == 200:
-                                    image_data = await response.read()
-                                    sticker_description = await self.describe_image(image_data)
-                                    description = f"[Sticker '{sticker.name}' showing: {sticker_description}]"
-                    except Exception as e:
-                        logger.debug(f"Could not describe sticker image: {e}")
-                        description += "]"
-                else:
-                    description += "]"
-                
-                text_parts.append(description)
-            except Exception as e:
-                logger.error(f"Error processing sticker {sticker.name} for context: {e}")
-                text_parts.append(f"[Sticker: {sticker.name}]")
-        
-        # Check for image/audio URLs in message content
-        if message.content:
-            urls = re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', message.content)
-            for url in urls:
-                try:
-                    if any(ext in url.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
-                        text = await self._get_image_url_description_for_context(url)
-                        if text:
-                            text_parts.append(text)
-                    
-                    elif any(ext in url.lower() for ext in ['.mp3', '.wav', '.ogg', '.m4a']):
-                        text = await self._get_audio_url_description_for_context(url)
-                        if text:
-                            text_parts.append(text)
-                except Exception as e:
-                    logger.error(f"Error processing URL {url} for context: {e}")
-        
-        return " ".join(text_parts)
-    
-    async def _get_image_description_for_context(self, attachment: discord.Attachment) -> str:
-        """Get AI-powered image description for context"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(attachment.url) as response:
-                    if response.status == 200:
-                        image_data = await response.read()
-                        
-                        # Get AI description
-                        description = await self.describe_image(image_data)
-                        
-                        return f"[Image showing: {description}]"
-        except Exception as e:
-            logger.error(f"Error getting image description for context {attachment.filename}: {e}")
-        
-        return f"[Image: {attachment.filename}]"
-    
-    async def _get_audio_description_for_context(self, attachment: discord.Attachment) -> str:
-        """Get audio description for context (with transcription if possible)"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(attachment.url) as response:
-                    if response.status == 200:
-                        audio_data = await response.read()
-                        
-                        # Try to transcribe audio
-                        transcription = await self._transcribe_audio(audio_data, attachment.filename)
-                        
-                        if transcription:
-                            return f"[Audio message: \"{transcription}\"]"
-                        else:
-                            return f"[Audio file: {attachment.filename}]"
-        except Exception as e:
-            logger.error(f"Error getting audio description for context {attachment.filename}: {e}")
-        
-        return f"[Audio: {attachment.filename}]"
-    
-    async def _get_image_url_description_for_context(self, url: str) -> str:
-        """Get image URL description for context with AI"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        image_data = await response.read()
-                        
-                        # Get AI description
-                        description = await self.describe_image(image_data)
-                        
-                        return f"[Image from URL showing: {description}]"
-        except Exception as e:
-            logger.error(f"Error getting image URL description for context {url}: {e}")
-        
-        return f"[Image from URL]"
-    
-    async def _get_audio_url_description_for_context(self, url: str) -> str:
-        """Get audio URL description for context"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        audio_data = await response.read()
-                        filename = url.split('/')[-1] or "audio"
-                        
-                        transcription = await self._transcribe_audio(audio_data, filename)
-                        
-                        if transcription:
-                            return f"[Audio from URL: \"{transcription}\"]"
-                        else:
-                            return f"[Audio from URL: {filename}]"
-        except Exception as e:
-            logger.error(f"Error getting audio URL description for context {url}: {e}")
-        
-        return f"[Audio from URL]"
 
 class ResponseProcessor:
     """Processes bot responses to handle Shapes file URLs"""
