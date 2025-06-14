@@ -168,7 +168,7 @@ class ContextManager:
         
         Args:
             context_messages: List of context messages
-            current_message: The current message content
+            current_message: The current message content (already formatted)
             current_user: Display name of current user
             current_user_id: User ID of current user
             is_ping: Whether the bot was pinged/mentioned
@@ -191,20 +191,20 @@ class ContextManager:
                 # Add instruction to focus on the last message
                 prompt_parts.append("IMPORTANT: Only respond to the most recent message below, not to the context messages above.\n")
             
-            # Handle different message scenarios - using same format as context messages
+            # Handle different message scenarios
             if is_ping and not current_message.strip():
                 # User just pinged the bot with no message
-                prompt_parts.append(f"{current_user}: [User is trying to get your attention (they pinged you). If this message is a reply to another message, check the original message to understand what they need.]")
+                prompt_parts.append(f"{current_user} is trying to get your attention (they pinged you). If this message is a reply to another message, check the original message to understand what they need.")
             elif current_message:
-                # Regular message - use same format as context
-                prompt_parts.append(f"{current_user}: {current_message}")
+                # Use the already formatted current message
+                prompt_parts.append(current_message)
             else:
                 # Fallback
-                prompt_parts.append(f"{current_user}: [User sent a message.]")
+                prompt_parts.append(f"{current_user} sent a message.")
             
             return "\n".join(prompt_parts)
             
         except Exception as e:
             logger.error(f"Error building prompt: {e}")
             # Fallback to simple prompt
-            return f"{current_user}: {current_message}" if current_message else f"{current_user}: [User sent a message.]"
+            return current_message if current_message else f"{current_user} sent a message."
