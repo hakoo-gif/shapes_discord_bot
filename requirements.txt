@@ -7,6 +7,4 @@ python-dotenv
 SpeechRecognition
 pydub
 requests
-transformers
-torch
-torchvision
+base64
