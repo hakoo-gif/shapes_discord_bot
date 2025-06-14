@@ -168,7 +168,7 @@ class ContextManager:
         
         Args:
             context_messages: List of context messages
-            current_message: The current message content (already formatted)
+            current_message: The current message content
             current_user: Display name of current user
             current_user_id: User ID of current user
             is_ping: Whether the bot was pinged/mentioned
@@ -196,8 +196,8 @@ class ContextManager:
                 # User just pinged the bot with no message
                 prompt_parts.append(f"{current_user} is trying to get your attention (they pinged you). If this message is a reply to another message, check the original message to understand what they need.")
             elif current_message:
-                # Use the already formatted current message
-                prompt_parts.append(current_message)
+                # Regular message
+                prompt_parts.append(f"{current_user}: {current_message}")
             else:
                 # Fallback
                 prompt_parts.append(f"{current_user} sent a message.")
@@ -207,4 +207,4 @@ class ContextManager:
         except Exception as e:
             logger.error(f"Error building prompt: {e}")
             # Fallback to simple prompt
-            return current_message if current_message else f"{current_user} sent a message."
+            return f"{current_user}: {current_message}" if current_message else f"{current_user} sent a message."
