@@ -298,6 +298,146 @@ class MediaProcessor:
             logger.debug(f"Audio transcription failed for {filename}: {e}")
             return None
 
+    async def process_message_media_for_context(self, message: discord.Message) -> str:
+        """
+        Process media in a message for context purposes (text description only)
+        
+        Args:
+            message: Discord message object
+            
+        Returns:
+            Text description of media content
+        """
+        text_parts = []
+        
+        # Process attachments
+        for attachment in message.attachments:
+            try:
+                if attachment.content_type:
+                    if attachment.content_type.startswith('image/'):
+                        text = await self._get_image_description_for_context(attachment)
+                        if text:
+                            text_parts.append(text)
+                    
+                    elif attachment.content_type.startswith('audio/'):
+                        text = await self._get_audio_description_for_context(attachment)
+                        if text:
+                            text_parts.append(text)
+                    
+                    elif attachment.content_type.startswith('video/'):
+                        text_parts.append(f"[Video file: {attachment.filename}]")
+            except Exception as e:
+                logger.error(f"Error processing attachment {attachment.filename} for context: {e}")
+                text_parts.append(f"[Unable to process {attachment.filename}]")
+        
+        # Process stickers
+        for sticker in message.stickers:
+            try:
+                description = f"[Sticker: {sticker.name}"
+                if hasattr(sticker, 'description') and sticker.description:
+                    description += f" - {sticker.description}"
+                description += "]"
+                text_parts.append(description)
+            except Exception as e:
+                logger.error(f"Error processing sticker {sticker.name} for context: {e}")
+                text_parts.append(f"[Sticker: {sticker.name}]")
+        
+        # Check for image/audio URLs in message content
+        if message.content:
+            urls = re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', message.content)
+            for url in urls:
+                try:
+                    if any(ext in url.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
+                        text = await self._get_image_url_description_for_context(url)
+                        if text:
+                            text_parts.append(text)
+                    
+                    elif any(ext in url.lower() for ext in ['.mp3', '.wav', '.ogg', '.m4a']):
+                        text = await self._get_audio_url_description_for_context(url)
+                        if text:
+                            text_parts.append(text)
+                except Exception as e:
+                    logger.error(f"Error processing URL {url} for context: {e}")
+        
+        return " ".join(text_parts)
+    
+    async def _get_image_description_for_context(self, attachment: discord.Attachment) -> str:
+        """Get basic image description for context"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(attachment.url) as response:
+                    if response.status == 200:
+                        image_data = await response.read()
+                        
+                        with Image.open(io.BytesIO(image_data)) as img:
+                            width, height = img.size
+                            format_name = img.format
+                            
+                        return f"[Image: {attachment.filename} ({width}x{height}, {format_name})]"
+        except Exception as e:
+            logger.error(f"Error getting image description for context {attachment.filename}: {e}")
+        
+        return f"[Image: {attachment.filename}]"
+    
+    async def _get_audio_description_for_context(self, attachment: discord.Attachment) -> str:
+        """Get audio description for context (with transcription if possible)"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(attachment.url) as response:
+                    if response.status == 200:
+                        audio_data = await response.read()
+                        
+                        # Try to transcribe audio
+                        transcription = await self._transcribe_audio(audio_data, attachment.filename)
+                        
+                        if transcription:
+                            return f"[Audio message: \"{transcription}\"]"
+                        else:
+                            return f"[Audio file: {attachment.filename}]"
+        except Exception as e:
+            logger.error(f"Error getting audio description for context {attachment.filename}: {e}")
+        
+        return f"[Audio: {attachment.filename}]"
+    
+    async def _get_image_url_description_for_context(self, url: str) -> str:
+        """Get image URL description for context"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        image_data = await response.read()
+                        
+                        with Image.open(io.BytesIO(image_data)) as img:
+                            width, height = img.size
+                            format_name = img.format
+                        
+                        filename = url.split('/')[-1] or "image"
+                        return f"[Image from URL: {filename} ({width}x{height})]"
+        except Exception as e:
+            logger.error(f"Error getting image URL description for context {url}: {e}")
+        
+        return f"[Image from URL]"
+    
+    async def _get_audio_url_description_for_context(self, url: str) -> str:
+        """Get audio URL description for context"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        audio_data = await response.read()
+                        filename = url.split('/')[-1] or "audio"
+                        
+                        transcription = await self._transcribe_audio(audio_data, filename)
+                        
+                        if transcription:
+                            return f"[Audio from URL: \"{transcription}\"]"
+                        else:
+                            return f"[Audio from URL: {filename}]"
+        except Exception as e:
+            logger.error(f"Error getting audio URL description for context {url}: {e}")
+        
+        return f"[Audio from URL]"
+
 class ResponseProcessor:
     """Processes bot responses to handle Shapes file URLs"""
     
