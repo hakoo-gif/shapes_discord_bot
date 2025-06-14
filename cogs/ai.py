@@ -140,10 +140,10 @@ class AICog(commands.Cog):
             # Build message content with media processing
             message_content = message.content or ""
             media_description, media_data = await self.media_processor.process_message_media(message)
-            
+
             if media_description:
                 message_content = f"{message_content} {media_description}".strip()
-            
+
             # Process replied message media if it exists
             replied_media_description = ""
             replied_media_data = []
@@ -151,7 +151,9 @@ class AICog(commands.Cog):
                 replied_msg = message.reference.resolved
                 replied_media_description, replied_media_data = await self.media_processor.process_message_media(replied_msg)
                 if replied_media_description:
-                    message_content = f"{message_content} [Referenced message media: {replied_media_description}]".strip()
+                    # Add to message content for context
+                    replied_content = replied_msg.content[:50] + "..." if len(replied_msg.content) > 50 else replied_msg.content
+                    message_content = f"[Replying to {replied_msg.author.display_name}: {replied_content} {replied_media_description}] {message_content}".strip()
             
             # Combine media data
             all_media_data = media_data + replied_media_data
