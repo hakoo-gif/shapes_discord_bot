@@ -9,6 +9,8 @@ from pydub import AudioSegment
 import tempfile
 import os
 from typing import List, Optional, Tuple, Dict, Any
+from transformers import BlipProcessor, BlipForConditionalGeneration
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,52 @@ class MediaProcessor:
     
     def __init__(self):
         self.recognizer = sr.Recognizer()
+        self._blip_processor = None
+        self._blip_model = None
+        self._device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    def _get_blip_model(self):
+        """Lazy load BLIP model"""
+        if self._blip_processor is None or self._blip_model is None:
+            try:
+                logger.info("Loading BLIP model for image description...")
+                self._blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+                self._blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+                self._blip_model.to(self._device)
+                logger.info(f"BLIP model loaded on {self._device}")
+            except Exception as e:
+                logger.error(f"Failed to load BLIP model: {e}")
+                self._blip_processor = None
+                self._blip_model = None
+        
+        return self._blip_processor, self._blip_model
+
+    async def _describe_image(self, image_data: bytes) -> str:
+        """Generate description for image using BLIP model"""
+        try:
+            processor, model = self._get_blip_model()
+            if processor is None or model is None:
+                return "image"
+            
+            # Open image
+            image = Image.open(io.BytesIO(image_data))
+            
+            # Convert to RGB if necessary
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Process image and generate description
+            inputs = processor(image, return_tensors="pt").to(self._device)
+            
+            with torch.no_grad():
+                out = model.generate(**inputs, max_length=50, num_beams=5)
+            
+            description = processor.decode(out[0], skip_special_tokens=True)
+            return description
+            
+        except Exception as e:
+            logger.error(f"Error describing image: {e}")
+            return "image"
     
     async def process_message_media(self, message: discord.Message) -> Tuple[str, List[Dict[str, Any]]]:
         """
@@ -137,19 +185,23 @@ class MediaProcessor:
                     if response.status == 200:
                         image_data = await response.read()
                         
-                        # Basic image analysis
+                        # Get image description
+                        description_text = await self._describe_image(image_data)
+                        
+                        # Basic image analysis for metadata
                         with Image.open(io.BytesIO(image_data)) as img:
                             width, height = img.size
                             format_name = img.format
                             
-                        description = f"[Image: {attachment.filename} ({width}x{height}, {format_name})]"
+                        description = f"[Image showing: {description_text}]"
                         
                         return description, {
                             'type': 'image_url',
                             'image_url': {'url': attachment.url},
                             'filename': attachment.filename,
                             'size': f"{width}x{height}",
-                            'format': format_name
+                            'format': format_name,
+                            'description': description_text
                         }
         except Exception as e:
             logger.error(f"Error processing image {attachment.filename}: {e}")
@@ -218,19 +270,23 @@ class MediaProcessor:
                     if response.status == 200:
                         image_data = await response.read()
                         
+                        # Get image description
+                        description_text = await self._describe_image(image_data)
+                        
                         with Image.open(io.BytesIO(image_data)) as img:
                             width, height = img.size
                             format_name = img.format
                         
                         filename = url.split('/')[-1] or "image"
-                        description = f"[Image from URL: {filename} ({width}x{height})]"
+                        description = f"[Image showing: {description_text}]"
                         
                         return description, {
                             'type': 'image_url',
                             'image_url': {'url': url},
                             'filename': filename,
                             'size': f"{width}x{height}",
-                            'format': format_name
+                            'format': format_name,
+                            'description': description_text
                         }
         except Exception as e:
             logger.error(f"Error processing image URL {url}: {e}")
@@ -362,18 +418,17 @@ class MediaProcessor:
         return " ".join(text_parts)
     
     async def _get_image_description_for_context(self, attachment: discord.Attachment) -> str:
-        """Get basic image description for context"""
+        """Get image description for context"""
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(attachment.url) as response:
                     if response.status == 200:
                         image_data = await response.read()
                         
-                        with Image.open(io.BytesIO(image_data)) as img:
-                            width, height = img.size
-                            format_name = img.format
-                            
-                        return f"[Image: {attachment.filename} ({width}x{height}, {format_name})]"
+                        # Get image description
+                        description_text = await self._describe_image(image_data)
+                        
+                        return f"[Image showing: {description_text}]"
         except Exception as e:
             logger.error(f"Error getting image description for context {attachment.filename}: {e}")
         
@@ -407,12 +462,10 @@ class MediaProcessor:
                     if response.status == 200:
                         image_data = await response.read()
                         
-                        with Image.open(io.BytesIO(image_data)) as img:
-                            width, height = img.size
-                            format_name = img.format
+                        # Get image description
+                        description_text = await self._describe_image(image_data)
                         
-                        filename = url.split('/')[-1] or "image"
-                        return f"[Image from URL: {filename} ({width}x{height})]"
+                        return f"[Image showing: {description_text}]"
         except Exception as e:
             logger.error(f"Error getting image URL description for context {url}: {e}")
         
