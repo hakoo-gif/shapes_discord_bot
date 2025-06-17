@@ -10,9 +10,9 @@ class RateLimiter:
     """Handles rate limiting for bot interactions"""
     
     def __init__(self):
-        # Bot-to-bot interaction limits (3 responses per minute)
+        # Bot-to-bot interaction limits (responses per minute)
         self.bot_interactions: Dict[int, deque] = defaultdict(deque)  # channel_id -> timestamps
-        self.bot_response_limit = 3
+        self.bot_response_limit = 20
         self.bot_time_window = 60  # seconds
         
         # API rate limit tracking
@@ -117,7 +117,8 @@ class ResponseScheduler:
     
     def __init__(self, rate_limiter: RateLimiter):
         self.rate_limiter = rate_limiter
-        self.pending_tasks: Dict[int, asyncio.Task] = {}  # message_id -> task
+        self.pending_tasks: Dict[str, asyncio.Task] = {}  # "channel_id:user_id" -> task
+        self.latest_bot_message: Dict[str, int] = {}  # "channel_id:user_id" -> message_id
     
     async def schedule_response(self, message, response_func, is_bot_conversation: bool = False):
         """
@@ -129,31 +130,58 @@ class ResponseScheduler:
             is_bot_conversation: Whether this is a bot-to-bot conversation
         """
         channel_id = message.channel.id
+        user_id = message.author.id
+        message_id = message.id
         
-        # Cancel any pending response for this channel
-        if channel_id in self.pending_tasks:
-            self.pending_tasks[channel_id].cancel()
+        # Create unique key for this bot in this channel
+        bot_key = f"{channel_id}:{user_id}"
         
-        # Calculate delay
-        delay = 0
         if is_bot_conversation:
+            # Update latest bot message for this specific bot in this channel
+            self.latest_bot_message[bot_key] = message_id
+            
+            # Cancel any pending response for this specific bot
+            if bot_key in self.pending_tasks:
+                self.pending_tasks[bot_key].cancel()
+                logger.debug(f"Cancelled previous response task for bot {user_id} in channel {channel_id}")
+            
+            # Check if can respond (channel-wide rate limit)
             can_respond, wait_time = self.rate_limiter.can_respond_to_bot(channel_id)
             if not can_respond:
-                delay = wait_time
-            else:
-                delay = DelayCalculator.get_bot_conversation_delay()
+                logger.info(f"Bot conversation rate limited in channel {channel_id}, wait time: {wait_time:.1f}s")
+                return
+            
+            delay = DelayCalculator.get_bot_conversation_delay()
+        else:
+            # For human conversations, use channel-only key for backwards compatibility
+            human_key = str(channel_id)
+            if human_key in self.pending_tasks:
+                self.pending_tasks[human_key].cancel()
+            delay = 0
+            bot_key = human_key
+        
+        # Checks if message is still latest for this bot
+        async def validated_response():
+            # For bot conversations, check if this message is still the latest from this bot
+            if is_bot_conversation:
+                current_latest = self.latest_bot_message.get(f"{channel_id}:{user_id}")
+                if current_latest != message_id:
+                    logger.debug(f"Skipping response to outdated message {message_id} from bot {user_id} in channel {channel_id} (latest: {current_latest})")
+                    return
+            
+            await response_func()
         
         # Schedule the response
-        task = asyncio.create_task(self._delayed_response(message, response_func, delay, is_bot_conversation))
-        self.pending_tasks[channel_id] = task
+        task = asyncio.create_task(self._delayed_response(message, validated_response, delay, is_bot_conversation))
+        self.pending_tasks[bot_key] = task
         
         try:
             await task
         except asyncio.CancelledError:
-            logger.debug(f"Response cancelled for channel {channel_id}")
+            logger.debug(f"Response cancelled for {bot_key}")
         finally:
-            if channel_id in self.pending_tasks:
-                del self.pending_tasks[channel_id]
+            if bot_key in self.pending_tasks and self.pending_tasks[bot_key] == task:
+                del self.pending_tasks[bot_key]
     
     async def _delayed_response(self, message, response_func, delay: float, is_bot_conversation: bool):
         """Execute delayed response"""
@@ -167,7 +195,7 @@ class ResponseScheduler:
             typing_delay = DelayCalculator.get_typing_delay(100)  # Assume ~100 char response
             await asyncio.sleep(typing_delay)
             
-            # Execute the response
+            # Execute the response (already validated in schedule_response)
             await response_func()
             
             # Record bot interaction if it's a bot conversation

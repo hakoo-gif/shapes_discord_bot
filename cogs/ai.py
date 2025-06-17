@@ -67,13 +67,13 @@ class AICog(commands.Cog):
                 # Use scheduler delays for bot conversations
                 await self.response_scheduler.schedule_response(
                     message=message,
-                    response_func=lambda: self._handle_ai_response(message),
+                    response_func=lambda: self._handle_ai_response(message, is_bot_conversation=True),
                     is_bot_conversation=True
                 )
             else:
-                # Respond to users
+                # Respond to users immediately
                 async with message.channel.typing():
-                    await self._handle_ai_response(message)
+                    await self._handle_ai_response(message, is_bot_conversation=False)
             
         except Exception as e:
             logger.error(f"Error in on_message: {e}", exc_info=True)
@@ -83,7 +83,6 @@ class AICog(commands.Cog):
         try:
             # Always respond in DMs
             if isinstance(message.channel, discord.DMChannel):
-                # logger.info(f"DM channel - responding")
                 return True
             
             # Check guild settings
@@ -106,32 +105,56 @@ class AICog(commands.Cog):
                         if message.channel.id not in whitelist:
                             return False
                 
-                # Check if bot is activated
-                if not settings.get("activated", False):
-                    # Bot not activated
-                    is_mentioned_or_replied = (
-                        self.bot.user in message.mentions or 
-                        (message.reference and 
-                         message.reference.resolved and 
-                         message.reference.resolved.author == self.bot.user)
-                    )
-                    
-                    has_trigger_words = self.trigger_filter.check_trigger_words(message.content, self.bot.trigger_words)
-                    
-                    result = is_mentioned_or_replied or has_trigger_words
-                    return result
+                # Check if specific channel is activated
+                is_channel_activated = await self.bot.storage.is_channel_activated(
+                    message.guild.id, message.channel.id
+                )
                 
-                # Bot is activated
-                return True
+                # Check mentions and replies
+                is_mentioned_or_replied = (
+                    self.bot.user in message.mentions or 
+                    (message.reference and 
+                     message.reference.resolved and 
+                     message.reference.resolved.author == self.bot.user)
+                )
+                
+                # Check global trigger words
+                has_global_trigger_words = self.trigger_filter.check_trigger_words(
+                    message.content, self.bot.trigger_words
+                )
+                
+                # Check server-specific trigger words
+                server_trigger_words = await self.bot.storage.get_server_trigger_words(message.guild.id)
+                has_server_trigger_words = self.trigger_filter.check_trigger_words(
+                    message.content, server_trigger_words
+                )
+                
+                has_trigger_words = has_global_trigger_words or has_server_trigger_words
+                
+                if is_channel_activated:
+                    # Channel is activated - respond to all messages but avoid joining conversations
+                    # Don't respond if:
+                    # 1. Message is a reply to someone else (not the bot)
+                    # 2. AND the message doesn't mention the bot or contain trigger words
+                    if (message.reference and 
+                        message.reference.resolved and 
+                        message.reference.resolved.author != self.bot.user and
+                        not is_mentioned_or_replied and 
+                        not has_trigger_words):
+                        return False
+                    
+                    return True
+                else:
+                    # Channel not activated - only respond to mentions and trigger words
+                    return is_mentioned_or_replied or has_trigger_words
             
-            logger.info(f"No guild found - not responding")
             return False
             
         except Exception as e:
             logger.error(f"Error checking if should respond: {e}")
             return False
     
-    async def _handle_ai_response(self, message: discord.Message):
+    async def _handle_ai_response(self, message: discord.Message, is_bot_conversation: bool = False):
         """Handle AI response generation and sending"""
         try:
             # Get user's auth data
@@ -197,20 +220,21 @@ class AICog(commands.Cog):
             )
             
             # Generate AI response
-            response_text = await self._generate_ai_response(prompt, message.author.id, user_auth_data, message, media_data)
+            response_text = await self._generate_ai_response(prompt, message.author.id, user_auth_data, message, media_data, is_bot_conversation)
             
             if response_text:
-                await self._send_response(message, response_text)
-            else:
+                await self._send_response(message, response_text, is_bot_conversation)
+            elif not is_bot_conversation:
                 error_msg = self.custom_error_message if self.custom_error_message else "I'm having trouble generating a response right now. Please try again later."
                 await self._send_error_message(message, error_msg)
                 
         except Exception as e:
             logger.error(f"Error handling AI response: {e}", exc_info=True)
-            error_msg = self.custom_error_message if self.custom_error_message else "An error occurred while processing your message."
-            await self._send_error_message(message, error_msg)
+            if not is_bot_conversation:
+                error_msg = self.custom_error_message if self.custom_error_message else "An error occurred while processing your message."
+                await self._send_error_message(message, error_msg)
 
-    async def _generate_ai_response(self, prompt: str, user_id: int, user_auth_data: Optional[Dict[str, str]], message: discord.Message, media_data: List[Dict] = None) -> Optional[str]:
+    async def _generate_ai_response(self, prompt: str, user_id: int, user_auth_data: Optional[Dict[str, str]], message: discord.Message, media_data: List[Dict] = None, is_bot_conversation: bool = False) -> Optional[str]:
         """Generate AI response using Shapes API"""
         try:
             # Prepare messages
@@ -264,7 +288,12 @@ class AICog(commands.Cog):
             if self.rate_limiter.is_api_rate_limited(rate_limit_key):
                 wait_time = self.rate_limiter.get_api_rate_limit_wait(rate_limit_key)
                 logger.warning(f"Rate limited for {rate_limit_key}, waiting {wait_time:.1f}s")
-                return f"I'm being rate limited. Please try again in {wait_time:.1f} seconds."
+                
+                # Handle rate limit for bot vs human conversations
+                if is_bot_conversation:
+                    return None
+                else:
+                    return f"I'm being rate limited. Please try again in {wait_time:.1f} seconds."
             
             # Prepare payload
             payload = {
@@ -284,9 +313,17 @@ class AICog(commands.Cog):
                             import time
                             wait_time = reset_time - time.time()
                             self.rate_limiter.set_api_rate_limit(rate_limit_key, reset_time, remaining)
-                            return f"I'm being rate limited. Please try again in {wait_time:.1f} seconds."
+                            
+                            # Handle rate limit for bot vs human conversations
+                            if is_bot_conversation:
+                                return None
+                            else:
+                                return f"I'm being rate limited. Please try again in {wait_time:.1f} seconds."
                         else:
-                            return "I'm currently rate limited. Please try again in a moment."
+                            if is_bot_conversation:
+                                return None
+                            else:
+                                return "I'm currently rate limited. Please try again in a moment."
                     
                     # Handle other errors
                     if response.status != 200:
@@ -332,115 +369,7 @@ class AICog(commands.Cog):
         except Exception as e:
             logger.error(f"Failed to send error message: {e}")
     
-    async def _generate_ai_response(self, prompt: str, user_id: int, user_auth_data: Optional[Dict[str, str]], message: discord.Message, media_data: List[Dict] = None) -> Optional[str]:
-        """Generate AI response using Shapes API"""
-        try:
-            # Prepare messages
-            messages = [{"role": "user", "content": prompt}]
-            
-            # Add media data if present
-            if media_data:
-                for media in media_data:
-                    if media.get('type') == 'image_url':
-                        messages.append({
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": f"[Image: {media.get('filename', 'image')}]"},
-                                {"type": "image_url", "image_url": media['image_url']}
-                            ]
-                        })
-                    elif media.get('type') == 'audio_url' and media.get('transcription'):
-                        messages.append({
-                            "role": "user", 
-                            "content": f"[Audio transcription: {media['transcription']}]"
-                        })
-            
-            # Prepare headers and rate limit key
-            if user_auth_data and user_auth_data.get('app_id') and user_auth_data.get('auth_token'):
-                # User has auth data, use their credentials
-                headers = self.auth_manager.create_headers_for_user(
-                    user_auth_data['app_id'], 
-                    user_auth_data['auth_token']
-                )
-                # Set API key to "not-needed" when using user auth
-                headers["Authorization"] = "Bearer not-needed"
-                rate_limit_key = f"user_{user_id}"
-            else:
-                # Default headers for user/channel identification
-                headers = {
-                    "Authorization": f"Bearer {self.bot.shapes_api_key}",
-                    "Content-Type": "application/json",
-                    "X-User-Id": str(user_id),
-                    "X-Channel-Id": str(message.channel.id)
-                }
-                rate_limit_key = "default"
-            
-            # Check rate limits
-            if self.rate_limiter.is_api_rate_limited(rate_limit_key):
-                wait_time = self.rate_limiter.get_api_rate_limit_wait(rate_limit_key)
-                logger.warning(f"Rate limited for {rate_limit_key}, waiting {wait_time:.1f}s")
-                return f"I'm being rate limited. Please try again in {wait_time:.1f} seconds."
-            
-            # Prepare payload
-            payload = {
-                "model": f"shapesinc/{self.bot.SHAPES_USERNAME}",
-                "messages": messages
-            }
-            
-            # Make API request
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.shapes_api_url, json=payload, headers=headers) as response:
-                    # Handle rate limiting
-                    if response.status == 429:
-                        reset_time = float(response.headers.get('X-RateLimit-Reset-Time', 0))
-                        remaining = int(response.headers.get('X-Ratelimit-Remaining', 0))
-                        
-                        if reset_time > 0:
-                            import time
-                            wait_time = reset_time - time.time()
-                            self.rate_limiter.set_api_rate_limit(rate_limit_key, reset_time, remaining)
-                            return f"I'm being rate limited. Please try again in {wait_time:.1f} seconds."
-                        else:
-                            return "I'm currently rate limited. Please try again in a moment."
-                    
-                    # Handle other errors
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(f"Shapes API error {response.status}: {error_text}")
-                        
-                        if response.status == 401:
-                            if user_auth_data:
-                                # Remove invalid auth token
-                                await self.auth_manager.remove_user_auth_token(user_id)
-                                return "Your authentication has expired. Please use `/auth` to re-authenticate."
-                            else:
-                                return "Authentication error. Please check that your Shapes API key is valid."
-                        elif response.status == 403:
-                            return "Access forbidden. Please check your permissions."
-                        else:
-                            return f"API error ({response.status}). Please try again later."
-                    
-                    # Parse successful response
-                    data = await response.json()
-                    
-                    if 'choices' in data and len(data['choices']) > 0:
-                        content = data['choices'][0]['message']['content']
-                        return content.strip()
-                    else:
-                        logger.error(f"Unexpected API response format: {data}")
-                        return "Received an unexpected response from the API."
-                        
-        except aiohttp.ClientError as e:
-            logger.error(f"Network error calling Shapes API: {e}")
-            return "Network error. Please try again later."
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse API response: {e}")
-            return "Failed to parse API response. Please try again later."
-        except Exception as e:
-            logger.error(f"Error generating AI response: {e}", exc_info=True)
-            return "An error occurred while generating the response."
-    
-    async def _send_response(self, original_message: discord.Message, response_text: str):
+    async def _send_response(self, original_message: discord.Message, response_text: str, is_bot_conversation: bool = False):
         """Send AI response, handling file attachments and message length"""
         try:
             # Process response to extract Shapes files
@@ -505,11 +434,12 @@ class AICog(commands.Cog):
                                     await original_message.reply(chunk, mention_author=True)
                         except discord.HTTPException:
                             logger.error(f"Failed to send message chunk {i+1} even without files")
-                    
+            
         except Exception as e:
             logger.error(f"Error sending response: {e}", exc_info=True)
-            error_msg = self.custom_error_message if self.custom_error_message else "I generated a response but couldn't send it properly."
-            await self._send_error_message(original_message, error_msg)
+            if not is_bot_conversation:
+                error_msg = self.custom_error_message if self.custom_error_message else "I generated a response but couldn't send it properly."
+                await self._send_error_message(original_message, error_msg)
     
     async def _download_shapes_files(self, file_urls: List[str]) -> List[discord.File]:
         """Download Shapes files and convert to Discord files"""

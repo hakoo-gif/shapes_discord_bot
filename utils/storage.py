@@ -167,3 +167,69 @@ class DataStorage:
         """Check if a user is blocked in a guild"""
         blocked_users = await self.get_blocked_users(guild_id)
         return user_id in blocked_users
+    
+    # Trigger Words Methods
+    async def get_server_trigger_words(self, guild_id: int) -> List[str]:
+        """Get server-specific trigger words"""
+        try:
+            settings = await self.get_server_settings(guild_id)
+            return settings.get("server_trigger_words", [])
+        except Exception as e:
+            logger.error(f"Error getting server trigger words: {e}")
+            return []
+
+    async def add_server_trigger_word(self, guild_id: int, word: str) -> bool:
+        """Add a server-specific trigger word"""
+        try:
+            settings = await self.get_server_settings(guild_id)
+            if "server_trigger_words" not in settings:
+                settings["server_trigger_words"] = []
+            
+            word = word.strip().lower()
+            if word and word not in settings["server_trigger_words"]:
+                settings["server_trigger_words"].append(word)
+                await self.update_server_settings(guild_id, settings)
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error adding server trigger word: {e}")
+            return False
+
+    async def remove_server_trigger_word(self, guild_id: int, word: str) -> bool:
+        """Remove a server-specific trigger word"""
+        try:
+            settings = await self.get_server_settings(guild_id)
+            server_trigger_words = settings.get("server_trigger_words", [])
+            
+            word = word.strip().lower()
+            if word in server_trigger_words:
+                settings["server_trigger_words"].remove(word)
+                await self.update_server_settings(guild_id, settings)
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error removing server trigger word: {e}")
+            return False
+
+    # Channel Activation Methods
+    async def set_channel_activation(self, guild_id: int, channel_id: int, enabled: bool):
+        """Set channel-specific activation status"""
+        try:
+            settings = await self.get_server_settings(guild_id)
+            if "activated_channels" not in settings:
+                settings["activated_channels"] = {}
+            
+            settings["activated_channels"][str(channel_id)] = enabled
+            await self.update_server_settings(guild_id, settings)
+        except Exception as e:
+            logger.error(f"Error setting channel activation: {e}")
+
+    async def is_channel_activated(self, guild_id: int, channel_id: int) -> bool:
+        """Check if a specific channel is activated"""
+        try:
+            settings = await self.get_server_settings(guild_id)
+            activated_channels = settings.get("activated_channels", {})
+            return activated_channels.get(str(channel_id), False)
+        except Exception as e:
+            logger.error(f"Error checking channel activation: {e}")
+            return False

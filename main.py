@@ -36,19 +36,15 @@ async def main():
         bot = ShapesBot()
         
         # Load cogs
-        try:
-            await bot.load_extension('cogs.ai')
-            logger.info("Loaded AI cog successfully")
-        except Exception as e:
-            logger.error(f"Failed to load AI cog: {e}")
-            return
-            
-        try:
-            await bot.load_extension('cogs.commands')
-            logger.info("Loaded commands cog successfully")
-        except Exception as e:
-            logger.error(f"Failed to load commands cog: {e}")
-            return
+        cogs_dir = "./cogs"
+        for filename in os.listdir(cogs_dir):
+            if filename.endswith(".py") and filename != "__init__.py":
+                cog_path = f"cogs.{filename[:-3]}"
+                try:
+                    await bot.load_extension(cog_path)
+                    logger.info(f"Loaded {cog_path} successfully")
+                except Exception as e:
+                    logger.error(f"Failed to load {cog_path}: {e}")
         
         logger.info("Starting Shapes Discord Bot...")
         
