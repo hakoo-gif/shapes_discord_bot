@@ -86,17 +86,20 @@
 
 ### Slash Commands
 The bot provides slash commands:
-
-- `/activate <Enable/Disable>` - Make the bot respond to all messages in the channel
   
 - `/auth <option: action>` - Authenticate with Shapes API or remove authentication
   - Action: Authenticate/Remove Authentication
 
+- `/activate <enable: True/False>` - Make the bot respond to all messages in the channel
+
 - `/blacklist` and `/whitelist` - Manage whitelist/blacklist channels: blacklist channels = bot ignore those channels, whitelist channels = bot only respond in those channels
   - Mode Conflict: Using `blacklist` will auto clear `whitelist` and vice versa
 
-- `/block <user> <action>` - Make the bot respond to all messages in the channel
-  - Action: Block/Unblock
+- `/block <user> <action: Block/Unblock>` - Make the bot respond to all messages in the channel
+  
+- `/permission <action: Add/Remove/List> <command_name> <option: role>` - Add or remove roles that can use specific bot commands
+  
+- `/trigger <action: Add/Remove/List> <option: word>` - Server-specific trigger word management
 
 ### Prefix Commands
 The bot using Shapes API prefix commands
@@ -115,7 +118,7 @@ The bot using Shapes API prefix commands
 - Contextual Replies
 - Image & Voice process (include sticker)
 - Channel Modes
-- Trigger Words: The bot will respond to messages containing trigger words defined in the `.env` file
+- Trigger Words: The bot will respond to messages containing trigger words defined in the `.env` file (global) or using `/trigger` (server-specific)
 - Custom Bot Status, Reply Style, Error Message
 
 ## Troubleshooting
