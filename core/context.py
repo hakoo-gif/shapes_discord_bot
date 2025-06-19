@@ -1,5 +1,6 @@
 import discord
 import logging
+import re
 from typing import List, Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,10 @@ class ContextManager:
             for command in ContextManager.COMMAND_WORDS:
                 if command in processed_content:
                     processed_content = processed_content.replace(command, command[1:])
+            
+            # Resolve user mentions to display names
+            processed_content = await ContextManager._resolve_user_mentions(message, processed_content)
+            
             content_parts.append(processed_content)
         
         # Process media if media_processor is available
@@ -121,6 +126,9 @@ class ContextManager:
                         if command in ref_content:
                             ref_content = ref_content.replace(command, command[1:])
                     
+                    # Resolve user mentions in referenced content
+                    ref_content = await ContextManager._resolve_user_mentions(referenced_msg, ref_content)
+                    
                     # Process media in referenced message if media_processor is available
                     if media_processor:
                         try:
@@ -135,6 +143,52 @@ class ContextManager:
                 content_parts.insert(0, "[Replying to a message]")
         
         return " ".join(content_parts)
+    
+    @staticmethod
+    async def _resolve_user_mentions(message: discord.Message, content: str) -> str:
+        """
+        Resolve user mentions (<@123456789>) to display names
+        
+        Args:
+            message: The Discord message (for guild context)
+            content: The message content with mentions
+            
+        Returns:
+            Content with mentions resolved to display names
+        """
+        try:
+            # Pattern to match user mentions: <@123456789> or <@!123456789>
+            mention_pattern = r'<@!?(\d+)>'
+            
+            def replace_mention(match):
+                user_id = int(match.group(1))
+                
+                # Try to get user from guild first (for display names)
+                if message.guild:
+                    member = message.guild.get_member(user_id)
+                    if member:
+                        return f"@{member.display_name}"
+                
+                # Fallback to bot's user cache
+                user = message.guild.get_member(user_id) if message.guild else None
+                if not user and hasattr(message, '_state') and message._state:
+                    # Try to get from bot's user cache
+                    user = message._state.get_user(user_id)
+                
+                if user:
+                    return f"@{user.display_name if hasattr(user, 'display_name') else user.name}"
+                
+                # Fallback - keep the original mention but make it more readable
+                return f"@User({user_id})"
+            
+            # Replace all mentions
+            resolved_content = re.sub(mention_pattern, replace_mention, content)
+            return resolved_content
+            
+        except Exception as e:
+            logger.error(f"Error resolving user mentions: {e}")
+            # Return original content if error occurs
+            return content
     
     @staticmethod
     async def _add_basic_media_labels(message: discord.Message, content_parts: List[str]):
