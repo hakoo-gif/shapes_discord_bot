@@ -76,6 +76,52 @@ class AICog(commands.Cog):
             logger.error(f"Error checking permissions: {e}")
             return False
         
+    async def _resolve_user_mentions(self, message: discord.Message, content: str) -> str:
+        """
+        Resolve user mentions (<@123456789>) to display names
+        
+        Args:
+            message: The Discord message (for guild context)
+            content: The message content with mentions
+            
+        Returns:
+            Content with mentions resolved to display names
+        """
+        try:
+            import re
+            # Pattern to match user mentions: <@123456789> or <@!123456789>
+            mention_pattern = r'<@!?(\d+)>'
+            
+            def replace_mention(match):
+                user_id = int(match.group(1))
+                
+                # Try to get user from guild first (for display names)
+                if message.guild:
+                    member = message.guild.get_member(user_id)
+                    if member:
+                        return f"@{member.display_name}"
+                
+                # Fallback to bot's user cache
+                user = message.guild.get_member(user_id) if message.guild else None
+                if not user and hasattr(message, '_state') and message._state:
+                    # Try to get from bot's user cache
+                    user = message._state.get_user(user_id)
+                
+                if user:
+                    return f"@{user.display_name if hasattr(user, 'display_name') else user.name}"
+                
+                # Fallback - keep the original mention but make it more readable
+                return f"@User({user_id})"
+            
+            # Replace all mentions
+            resolved_content = re.sub(mention_pattern, replace_mention, content)
+            return resolved_content
+            
+        except Exception as e:
+            logger.error(f"Error resolving user mentions: {e}")
+            # Return original content if error occurs
+            return content
+        
     async def _can_send_messages(self, channel) -> bool:
         """Check if bot can send messages in the channel"""
         try:
@@ -253,6 +299,8 @@ class AICog(commands.Cog):
             
             # Add main message content
             if message_content:
+                # Resolve user mentions to display names
+                message_content = await self._resolve_user_mentions(message, message_content)
                 current_message_parts.append(message_content)
             
             # Add media description
