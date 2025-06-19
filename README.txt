@@ -98,6 +98,8 @@ The bot provides slash commands:
 - `/block <user> <action: Block/Unblock>` - Make the bot respond to all messages in the channel
   
 - `/permission <action: Add/Remove/List> <command_name> <option: role>` - Add or remove roles that can use specific bot commands
+
+- `/revivechat <action: enable/disable/status> <option: channel> <option: role> <option: interval>` - Revive chat with scheduled messages
   
 - `/trigger <action: Add/Remove/List> <option: word>` - Server-specific trigger word management
 
