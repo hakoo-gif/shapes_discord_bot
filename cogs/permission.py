@@ -38,7 +38,7 @@ class PermissionCommand(commands.Cog):
             
             # Valid command names that can have role permissions
             valid_commands = [
-                "activate", "block", "whitelist", "blacklist", "trigger"  # Add more commands as needed
+                "activate", "block", "whitelist", "blacklist", "trigger", "revivechat" # Add more commands as needed
             ]
             
             if command_name not in valid_commands:
