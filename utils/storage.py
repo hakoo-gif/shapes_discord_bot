@@ -18,6 +18,7 @@ class DataStorage:
         self.server_settings_file = self.data_dir / "server_settings.json"
         self.user_auth_file = self.data_dir / "user_auth.json"
         self.blocked_users_file = self.data_dir / "blocked_users.json"
+        self.revive_chat_file = self.data_dir / "revive_chat.json"
         
         # Initialize files if they don't exist
         self._init_files()
@@ -27,7 +28,8 @@ class DataStorage:
         default_data = {
             "server_settings.json": {},
             "user_auth.json": {},
-            "blocked_users.json": {}
+            "blocked_users.json": {},
+            "revive_chat.json": {}
         }
         
         for filename, default_content in default_data.items():
@@ -233,3 +235,54 @@ class DataStorage:
         except Exception as e:
             logger.error(f"Error checking channel activation: {e}")
             return False
+        
+    # Revive Chat Methods
+    async def get_revive_chat_settings(self, guild_id: int) -> Dict[str, Any]:
+        """Get revive chat settings for a guild"""
+        try:
+            data = await self._read_json(self.revive_chat_file)
+            return data.get(str(guild_id), {
+                'enabled': False,
+                'channel_id': None,
+                'role_id': None,
+                'interval_minutes': 60,
+                'next_send_time': None
+            })
+        except Exception as e:
+            logger.error(f"Error getting revive chat settings: {e}")
+            return {
+                'enabled': False,
+                'channel_id': None,
+                'role_id': None,
+                'interval_minutes': 60,
+                'next_send_time': None
+            }
+
+    async def set_revive_chat_settings(self, guild_id: int, settings: Dict[str, Any]):
+        """Set revive chat settings for a guild"""
+        try:
+            data = await self._read_json(self.revive_chat_file)
+            data[str(guild_id)] = settings
+            await self._write_json(self.revive_chat_file, data)
+        except Exception as e:
+            logger.error(f"Error setting revive chat settings: {e}")
+
+    async def update_revive_chat_next_time(self, guild_id: int, next_time: str):
+        """Update the next send time for revive chat"""
+        try:
+            data = await self._read_json(self.revive_chat_file)
+            if str(guild_id) in data:
+                data[str(guild_id)]['next_send_time'] = next_time
+                await self._write_json(self.revive_chat_file, data)
+        except Exception as e:
+            logger.error(f"Error updating revive chat next time: {e}")
+
+    async def disable_revive_chat(self, guild_id: int):
+        """Disable revive chat for a guild"""
+        try:
+            data = await self._read_json(self.revive_chat_file)
+            if str(guild_id) in data:
+                data[str(guild_id)]['enabled'] = False
+                await self._write_json(self.revive_chat_file, data)
+        except Exception as e:
+            logger.error(f"Error disabling revive chat: {e}")
