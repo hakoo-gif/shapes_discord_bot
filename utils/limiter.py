@@ -186,7 +186,7 @@ class ResponseScheduler:
     async def _delayed_response(self, message, response_func, delay: float, is_bot_conversation: bool):
         """Execute delayed response"""
         if delay > 0:
-            logger.info(f"Delaying response by {delay:.1f} seconds")
+            # logger.info(f"Delaying response by {delay:.1f} seconds")
             await asyncio.sleep(delay)
         
         # Show typing indicator for a realistic duration
