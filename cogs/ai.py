@@ -42,6 +42,59 @@ class AICog(commands.Cog):
         
         # Custom error message
         self.custom_error_message = os.getenv('ERROR_MESSAGE', '').strip()
+        
+    async def _check_basic_permissions(self, message: discord.Message) -> bool:
+        """Check if bot has basic permissions to operate in the channel"""
+        try:
+            # Always allow DMs
+            if isinstance(message.channel, discord.DMChannel):
+                return True
+            
+            # Check guild permissions
+            if message.guild:
+                bot_member = message.guild.get_member(self.bot.user.id)
+                if not bot_member:
+                    return False
+                
+                # Get channel permissions
+                permissions = message.channel.permissions_for(bot_member)
+                
+                # Check minimum required permissions
+                required_perms = [
+                    permissions.read_messages,
+                    permissions.send_messages,
+                    permissions.view_channel
+                ]
+                
+                if not all(required_perms):
+                    logger.warning(f"Missing basic permissions in channel {message.channel.id}")
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error checking permissions: {e}")
+            return False
+        
+    async def _can_send_messages(self, channel) -> bool:
+        """Check if bot can send messages in the channel"""
+        try:
+            if isinstance(channel, discord.DMChannel):
+                return True
+            
+            if hasattr(channel, 'guild') and channel.guild:
+                bot_member = channel.guild.get_member(self.bot.user.id)
+                if not bot_member:
+                    return False
+                
+                permissions = channel.permissions_for(bot_member)
+                return permissions.send_messages and permissions.view_channel
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error checking send permissions: {e}")
+            return False
     
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -53,6 +106,10 @@ class AICog(commands.Cog):
             
             # Check if user is blocked
             if message.guild and await self.bot.storage.is_user_blocked(message.guild.id, message.author.id):
+                return
+            
+            # Check basic Discord permissions before proceeding
+            if not await self._check_basic_permissions(message):
                 return
             
             # Determine if we should respond
@@ -71,10 +128,17 @@ class AICog(commands.Cog):
                     is_bot_conversation=True
                 )
             else:
-                # Respond to users immediately
-                async with message.channel.typing():
+                try:
+                    async with message.channel.typing():
+                        await self._handle_ai_response(message, is_bot_conversation=False)
+                except discord.Forbidden:
+                    # Can't send typing indicator, but still try to respond
+                    logger.warning(f"Missing typing permission in {message.channel.id}")
                     await self._handle_ai_response(message, is_bot_conversation=False)
             
+        except discord.Forbidden as e:
+            logger.warning(f"Discord permission error in {message.channel.id}: {e}")
+            return
         except Exception as e:
             logger.error(f"Error in on_message: {e}", exc_info=True)
     
@@ -339,8 +403,36 @@ class AICog(commands.Cog):
                                 return "Authentication error. Please check that your Shapes API key is valid."
                         elif response.status == 403:
                             return "Access forbidden. Please check your permissions."
+                        elif response.status == 502:
+                            # Bad Gateway - server-side error
+                            if is_bot_conversation:
+                                return None
+                            else:
+                                return "The AI service is temporarily unavailable. Please try again in a few moments."
+                        elif response.status == 503:
+                            # Service Unavailable
+                            if is_bot_conversation:
+                                return None
+                            else:
+                                return "The AI service is currently overloaded. Please try again later."
+                        elif response.status == 504:
+                            # Gateway Timeout
+                            if is_bot_conversation:
+                                return None
+                            else:
+                                return "The AI service timed out. Please try again with a shorter message."
+                        elif response.status >= 500:
+                            # Other 5xx server errors
+                            if is_bot_conversation:
+                                return None
+                            else:
+                                return "The AI service is experiencing issues. Please try again later."
                         else:
-                            return f"API error ({response.status}). Please try again later."
+                            # Other 4xx client errors
+                            if is_bot_conversation:
+                                return None
+                            else:
+                                return f"Request error ({response.status}). Please try again later."
                     
                     # Parse successful response
                     data = await response.json()
@@ -372,6 +464,11 @@ class AICog(commands.Cog):
     async def _send_response(self, original_message: discord.Message, response_text: str, is_bot_conversation: bool = False):
         """Send AI response, handling file attachments and message length"""
         try:
+            # Check permissions before attempting to send
+            if not await self._can_send_messages(original_message.channel):
+                logger.warning(f"Cannot send messages in channel {original_message.channel.id}")
+                return
+            
             # Process response to extract Shapes files
             cleaned_content, shapes_files = self.response_processor.extract_shapes_files(response_text)
             
@@ -415,6 +512,20 @@ class AICog(commands.Cog):
                     if len(message_chunks) > 1 and i < len(message_chunks) - 1:
                         await asyncio.sleep(1)
                         
+                except discord.Forbidden as e:
+                    logger.warning(f"Permission denied sending message in {original_message.channel.id}: {e}")
+                    # Try fallback methods
+                    try:
+                        if current_files:
+                            # Try without files first
+                            await original_message.channel.send(chunk)
+                        else:
+                            # Already no files, permission issue is fundamental
+                            break
+                    except discord.Forbidden:
+                        logger.warning(f"Cannot send any messages in {original_message.channel.id}")
+                        break
+                        
                 except discord.HTTPException as e:
                     logger.error(f"Failed to send message chunk {i+1}: {e}")
                     # Try to send without files as fallback
@@ -432,9 +543,12 @@ class AICog(commands.Cog):
                                     await original_message.channel.send(chunk)
                                 else:
                                     await original_message.reply(chunk, mention_author=True)
-                        except discord.HTTPException:
+                        except (discord.HTTPException, discord.Forbidden):
                             logger.error(f"Failed to send message chunk {i+1} even without files")
             
+        except discord.Forbidden as e:
+            logger.warning(f"Permission error sending response: {e}")
+            return
         except Exception as e:
             logger.error(f"Error sending response: {e}", exc_info=True)
             if not is_bot_conversation:
