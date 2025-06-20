@@ -25,7 +25,7 @@
 
    ## Shapes API Configuration
    SHAPES_API_KEY=         # your shapes API key
-   SHAPE_USERNAME=         # your shape username (the vanity name after https://shapes.inc/)
+   SHAPES_USERNAME=         # your shape username (the vanity name after https://shapes.inc/)
 
    #=========CUSTOMIZE=========
    ## Discord Bot Configuration
@@ -59,7 +59,7 @@
 
 1. Go to https://shapes.inc/explore
 2. Select the shape
-3. SHAPE_USERNAME is the vanity name after https://shapes.inc/ (eg: SHAPE_USERNAME of https://shapes.inc/tenshi is tenshi)
+3. SHAPES_USERNAME is the vanity name after https://shapes.inc/ (eg: SHAPE_USERNAME of https://shapes.inc/tenshi is tenshi)
 
 ## Discord Bot Setup
 
