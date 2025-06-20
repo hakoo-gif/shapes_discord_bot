@@ -12,7 +12,6 @@ from typing import Optional, Dict, Any, List
 from utils.auth import AuthManager
 from utils.filters import TriggerFilter, MediaProcessor, ResponseProcessor
 from utils.limiter import RateLimiter, ResponseScheduler
-from core.context import ContextManager
 
 logger = logging.getLogger(__name__)
 
@@ -310,26 +309,17 @@ class AICog(commands.Cog):
             # Combine all parts
             formatted_current_message = " ".join(current_message_parts)
             
-            # Build context
-            context_messages = await ContextManager.get_channel_context(
-                channel=message.channel,
-                bot_user_id=self.bot.user.id,
-                target_message=message,
-                media_processor=self.media_processor
-            )
-            
             # Determine if user just pinged the bot
             is_ping = (self.bot.user in message.mentions and 
                       not message.content.replace(f'<@{self.bot.user.id}>', '').replace(f'<@!{self.bot.user.id}>', '').strip())
             
             # Build prompt
-            prompt = ContextManager.build_prompt(
-                context_messages=context_messages,
-                current_message=formatted_current_message,
-                current_user=message.author.display_name,
-                current_user_id=str(message.author.id),
-                is_ping=is_ping
-            )
+            if is_ping and not formatted_current_message.strip():
+                prompt = f"{message.author.display_name} is trying to get your attention (they pinged you). If this message is a reply to another message, check the original message to understand what they need."
+            elif formatted_current_message:
+                prompt = f"{message.author.display_name}: {formatted_current_message}"
+            else:
+                prompt = f"{message.author.display_name} sent a message."
             
             # Generate AI response
             response_text = await self._generate_ai_response(prompt, message.author.id, user_auth_data, message, media_data, is_bot_conversation)
