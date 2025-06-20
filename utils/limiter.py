@@ -10,10 +10,7 @@ class RateLimiter:
     """Handles rate limiting for bot interactions"""
     
     def __init__(self):
-        # Bot-to-bot interaction limits (responses per minute)
         self.bot_interactions: Dict[int, deque] = defaultdict(deque)  # channel_id -> timestamps
-        self.bot_response_limit = 20
-        self.bot_time_window = 60  # seconds
         
         # API rate limit tracking
         self.api_rate_limits: Dict[str, Tuple[float, int]] = {}  # key -> (reset_time, remaining)
@@ -35,18 +32,7 @@ class RateLimiter:
         """
         current_time = time.time()
         
-        # Clean old entries
-        self._cleanup_old_entries(channel_id, current_time)
-        
-        # Check if we've hit the response limit
-        if len(self.bot_interactions[channel_id]) >= self.bot_response_limit:
-            # Calculate when we can respond again
-            oldest_response = self.bot_interactions[channel_id][0]
-            reset_time = oldest_response + self.bot_time_window
-            wait_time = max(0, reset_time - current_time)
-            return False, wait_time
-        
-        # Check minimum delay since last response
+        # Check minimum delay since last response (keep this for natural pacing)
         if channel_id in self.last_bot_response:
             time_since_last = current_time - self.last_bot_response[channel_id]
             if time_since_last < self.bot_delay_min:
@@ -58,17 +44,11 @@ class RateLimiter:
     def record_bot_response(self, channel_id: int):
         """Record that the bot responded to another bot"""
         current_time = time.time()
-        self.bot_interactions[channel_id].append(current_time)
         self.last_bot_response[channel_id] = current_time
-        
-        # Clean old entries
-        self._cleanup_old_entries(channel_id, current_time)
     
     def _cleanup_old_entries(self, channel_id: int, current_time: float):
         """Remove entries older than the time window"""
-        interactions = self.bot_interactions[channel_id]
-        while interactions and interactions[0] < current_time - self.bot_time_window:
-            interactions.popleft()
+        pass
     
     def set_api_rate_limit(self, key: str, reset_time: float, remaining: int):
         """Set API rate limit information"""
@@ -145,11 +125,11 @@ class ResponseScheduler:
                 self.pending_tasks[bot_key].cancel()
                 logger.debug(f"Cancelled previous response task for bot {user_id} in channel {channel_id}")
             
-            # Check if can respond (channel-wide rate limit)
+            # Check if can respond (now only checks minimum delay, not response limit)
             can_respond, wait_time = self.rate_limiter.can_respond_to_bot(channel_id)
             if not can_respond:
-                logger.info(f"Bot conversation rate limited in channel {channel_id}, wait time: {wait_time:.1f}s")
-                return
+                logger.info(f"Bot conversation delayed in channel {channel_id}, wait time: {wait_time:.1f}s")
+                await asyncio.sleep(wait_time)
             
             delay = DelayCalculator.get_bot_conversation_delay()
         else:
