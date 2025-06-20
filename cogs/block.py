@@ -91,7 +91,7 @@ class BlockCommand(commands.Cog):
                     color=discord.Color.green()
                 )
             
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
             
         except Exception as e:
             logger.error(f"Error in block command: {e}")
