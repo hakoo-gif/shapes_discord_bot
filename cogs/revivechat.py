@@ -426,15 +426,10 @@ class ReviveChatCog(commands.Cog):
                     await interaction.response.send_message(embed=embed, ephemeral=True)
                     return
                 
-                # Check if role is mentionable or bot has manage roles permission
-                if not role.mentionable and not bot_member.guild_permissions.manage_roles:
-                    embed = discord.Embed(
-                        title="❌ Role Permission Issue",
-                        description=f"Role {role.mention} is not mentionable and I don't have 'Mention @everyone, @here, and All Roles' permission to ping it.",
-                        color=discord.Color.red()
-                    )
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
-                    return
+                # Check if role is mentionable or bot has 'Mention @everyone, @here, and All Roles' permission
+                warning_message = None
+                if not role.mentionable and not bot_member.guild_permissions.mention_everyone:
+                    warning_message = f"⚠️ **Warning:** Role {role.mention} is not mentionable and I don't have the 'Mention @everyone, @here, and All Roles' permission. The role ping may not work as expected."
                 
                 # Save settings
                 settings = {
@@ -457,13 +452,19 @@ class ReviveChatCog(commands.Cog):
                 
                 interval_display = self._format_time_display(interval_minutes)
                 embed = discord.Embed(
-                    title="Revive Chat Enabled",
+                    title="✅ Revive Chat Enabled",
                     description="Automated revive messages have been successfully configured!",
                     color=discord.Color.green()
                 )
                 embed.add_field(name="Channel", value=channel.mention, inline=True)
                 embed.add_field(name="Role", value=role.mention, inline=True)
                 embed.add_field(name="Interval", value=interval_display, inline=True)
+                
+                # Warning if role mention might not work
+                if warning_message:
+                    embed.add_field(name="⚠️ Notice", value=warning_message, inline=False)
+                    embed.color = discord.Color.orange()
+                
                 embed.set_footer(text=f"Configured by {interaction.user.display_name}")
                 embed.timestamp = datetime.now()
                 
