@@ -347,7 +347,7 @@ class AICog(commands.Cog):
                 for media in media_data:
                     if media.get('type') == 'image_base64':
                         # Add image description prompt
-                        image_prompt = f"Please describe this image in detail: [Image: {media.get('filename', 'image')}]"
+                        image_prompt = f"Check this image: [Image: {media.get('filename', 'image')}]"
                         messages.append({
                             "role": "user",
                             "content": [
