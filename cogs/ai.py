@@ -194,6 +194,14 @@ class AICog(commands.Cog):
             if isinstance(message.channel, discord.DMChannel):
                 return True
             
+            # Check if message is from a bot and bot-to-bot is not enabled
+            if message.author.bot and message.guild:
+                bot_to_bot_enabled = await self.bot.storage.is_bot_to_bot_enabled(
+                    message.guild.id, message.channel.id
+                )
+                if not bot_to_bot_enabled:
+                    return False
+            
             # Check guild settings
             if message.guild:
                 settings = await self.bot.storage.get_server_settings(message.guild.id)
