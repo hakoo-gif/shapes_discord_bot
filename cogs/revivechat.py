@@ -65,7 +65,9 @@ class ReviveChatCog(commands.Cog):
         try:
             # Get all guilds and check their revive chat settings
             for guild in self.bot.guilds:
-                settings = await self.bot.storage.get_revive_chat_settings(guild.id)
+                server_settings = await self.bot.storage.get_server_settings(guild.id)
+                settings = server_settings.get('revive_chat', {})
+
                 if settings.get('enabled', False):
                     scheduler_key = f"{guild.id}_{settings.get('channel_id', 0)}"
                     
@@ -139,7 +141,7 @@ class ReviveChatCog(commands.Cog):
         """Generate revive chat message using AI or fallback"""
         try:
             # Prepare prompt for AI
-            prompt = "Generate a casual, friendly conversation starter question to revive a quiet chat. Keep it engaging but not too personal. Make it one question only, around 10-20 words."
+            prompt = "Chat’s dead. Say one short, natural line (in your tone) that could spark someone to reply — not like a mod or QOTD."
             
             messages = [{"role": "user", "content": prompt}]
             
@@ -285,7 +287,9 @@ class ReviveChatCog(commands.Cog):
             
             while True:
                 # Check if still enabled
-                settings = await self.bot.storage.get_revive_chat_settings(guild_id)
+                server_settings = await self.bot.storage.get_server_settings(guild_id)
+                settings = server_settings.get('revive_chat', {})
+
                 if not settings.get('enabled', False):
                     logger.info(f"Revive chat disabled for guild {guild_id}, stopping scheduler")
                     break
@@ -304,7 +308,11 @@ class ReviveChatCog(commands.Cog):
                 next_time = datetime.now() + timedelta(minutes=interval_minutes)
                 
                 # Update next send time in storage
-                await self.bot.storage.update_revive_chat_next_time(guild_id, next_time.isoformat())
+                server_settings = await self.bot.storage.get_server_settings(guild_id)
+                if 'revive_chat' not in server_settings:
+                    server_settings['revive_chat'] = {}
+                server_settings['revive_chat']['next_send_time'] = next_time.isoformat()
+                await self.bot.storage.update_server_settings(guild_id, server_settings)
                 
                 logger.info(f"Next revive message for guild {guild_id} scheduled for {next_time}")
                 
@@ -432,15 +440,16 @@ class ReviveChatCog(commands.Cog):
                     warning_message = f"⚠️ **Warning:** Role {role.mention} is not mentionable and I don't have the 'Mention @everyone, @here, and All Roles' permission. The role ping may not work as expected."
                 
                 # Save settings
-                settings = {
+                server_settings = await self.bot.storage.get_server_settings(interaction.guild.id)
+                server_settings['revive_chat'] = {
                     'enabled': True,
                     'channel_id': channel.id,
                     'role_id': role.id,
                     'interval_minutes': interval_minutes,
-                    'next_send_time': None  # Will be set when scheduler starts
+                    'next_send_time': None
                 }
                 
-                await self.bot.storage.set_revive_chat_settings(interaction.guild.id, settings)
+                await self.bot.storage.update_server_settings(interaction.guild.id, server_settings)
                 
                 # Start scheduler
                 await self._start_scheduler(
@@ -472,7 +481,8 @@ class ReviveChatCog(commands.Cog):
             
             elif action == "disable":
                 # Get current settings
-                settings = await self.bot.storage.get_revive_chat_settings(interaction.guild.id)
+                server_settings = await self.bot.storage.get_server_settings(interaction.guild.id)
+                settings = server_settings.get('revive_chat', {})
                 
                 if not settings.get('enabled', False):
                     embed = discord.Embed(
@@ -484,8 +494,9 @@ class ReviveChatCog(commands.Cog):
                     return
                 
                 # Disable in storage
-                settings['enabled'] = False
-                await self.bot.storage.set_revive_chat_settings(interaction.guild.id, settings)
+                server_settings['revive_chat'] = settings
+                server_settings['revive_chat']['enabled'] = False
+                await self.bot.storage.update_server_settings(interaction.guild.id, server_settings)
                 
                 # Stop scheduler
                 scheduler_key = f"{interaction.guild.id}_{settings.get('channel_id', 0)}"
@@ -505,7 +516,8 @@ class ReviveChatCog(commands.Cog):
             
             elif action == "status":
                 # Get current settings
-                settings = await self.bot.storage.get_revive_chat_settings(interaction.guild.id)
+                server_settings = await self.bot.storage.get_server_settings(interaction.guild.id)
+                settings = server_settings.get('revive_chat', {})
                 
                 if not settings.get('enabled', False):
                     embed = discord.Embed(
