@@ -95,11 +95,15 @@ The bot provides slash commands:
 - `/blacklist` and `/whitelist` - Manage whitelist/blacklist channels: blacklist channels = bot ignore those channels, whitelist channels = bot only respond in those channels
   - Mode Conflict: Using `blacklist` will auto clear `whitelist` and vice versa
 
-- `/block <user> <action: Block/Unblock>` - Make the bot respond to all messages in the channel
+- `/block <user> <action: Block/Unblock>` - Block or unlock a user from chatting with the bot in server
+
+- `/botchat <enable: True/False>` - Enable or disable bot-to-bot conversations in the channel
   
 - `/permission <action: Add/Remove/List> <command_name> <option: role>` - Add or remove roles that can use specific bot commands
 
 - `/revivechat <action: enable/disable/status> <option: channel> <option: role> <option: interval>` - Revive chat with scheduled messages
+
+- `/say <message> <option: channel>` - Make the bot say a message
   
 - `/trigger <action: Add/Remove/List> <option: word>` - Server-specific trigger word management
 
@@ -118,8 +122,10 @@ The bot using Shapes API prefix commands
 ### Capabilities
 - AI chat: Responds to messages using Shapes Inc
 - Contextual Replies
-- Image & Voice process (include sticker)
+- Auth to link user personal/memories
+- Image, sticker & Voice process
 - Channel Modes
+- Bot talks to Bot
 - Trigger Words: The bot will respond to messages containing trigger words defined in the `.env` file (global) or using `/trigger` (server-specific)
 - Custom Bot Status, Reply Style, Error Message
 
