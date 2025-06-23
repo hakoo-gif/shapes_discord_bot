@@ -18,7 +18,6 @@ class DataStorage:
         self.server_settings_file = self.data_dir / "server_settings.json"
         self.user_auth_file = self.data_dir / "user_auth.json"
         self.blocked_users_file = self.data_dir / "blocked_users.json"
-        self.revive_chat_file = self.data_dir / "revive_chat.json"
         
         # Initialize files if they don't exist
         self._init_files()
