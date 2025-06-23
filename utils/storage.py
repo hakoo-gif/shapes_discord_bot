@@ -286,3 +286,26 @@ class DataStorage:
                 await self._write_json(self.revive_chat_file, data)
         except Exception as e:
             logger.error(f"Error disabling revive chat: {e}")
+            
+    # Bot-to-Bot Conversation Methods
+    async def set_bot_to_bot_enabled(self, guild_id: int, channel_id: int, enabled: bool):
+        """Set bot-to-bot conversation status for a specific channel"""
+        try:
+            settings = await self.get_server_settings(guild_id)
+            if "bot_to_bot_channels" not in settings:
+                settings["bot_to_bot_channels"] = {}
+            
+            settings["bot_to_bot_channels"][str(channel_id)] = enabled
+            await self.update_server_settings(guild_id, settings)
+        except Exception as e:
+            logger.error(f"Error setting bot-to-bot status: {e}")
+
+    async def is_bot_to_bot_enabled(self, guild_id: int, channel_id: int) -> bool:
+        """Check if bot-to-bot conversation is enabled for a specific channel"""
+        try:
+            settings = await self.get_server_settings(guild_id)
+            bot_to_bot_channels = settings.get("bot_to_bot_channels", {})
+            return bot_to_bot_channels.get(str(channel_id), False)
+        except Exception as e:
+            logger.error(f"Error checking bot-to-bot status: {e}")
+            return False
