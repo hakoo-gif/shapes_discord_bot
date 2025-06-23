@@ -15,7 +15,7 @@ class SayCog(commands.Cog):
     
     @app_commands.command(name="say", description="Make the bot say a message")
     @app_commands.describe(
-        message="The message to send",
+        message="The message to send (use \\n for new lines)",
         channel="The channel to send the message to (optional, defaults to current channel)"
     )
     async def say(self, interaction: discord.Interaction, message: str, channel: discord.TextChannel = None):
@@ -59,9 +59,12 @@ class SayCog(commands.Cog):
                 )
                 return
             
+            # Process message for newlines
+            processed_message = message.replace('\\n', '\n')
+
             # Send the message
             try:
-                await target_channel.send(message)
+                await target_channel.send(processed_message)
                 
                 # Confirm to the user
                 if target_channel == interaction.channel:
