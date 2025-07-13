@@ -107,7 +107,7 @@ The bot provides slash commands:
   
 - `/trigger <action: Add/Remove/List> <option: word>` - Server-specific trigger word management
 
-- `/welcome <channel> <status: Enable/Disable>` - Welcome message management
+- `/welcome <channel> <status: Enable/Disable>` - Select ⁠channel to send welcome message when new members join
 
 ### Prefix Commands
 The bot using Shapes API prefix commands
