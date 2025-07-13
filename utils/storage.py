@@ -28,7 +28,6 @@ class DataStorage:
             "server_settings.json": {},
             "user_auth.json": {},
             "blocked_users.json": {},
-            "revive_chat.json": {}
         }
         
         for filename, default_content in default_data.items():
@@ -308,3 +307,31 @@ class DataStorage:
         except Exception as e:
             logger.error(f"Error checking bot-to-bot status: {e}")
             return False
+        
+    # Welcome Settings Methods
+    async def get_welcome_settings(self, guild_id: int) -> Dict[str, Any]:
+        """Get welcome settings for a guild"""
+        try:
+            settings = await self.get_server_settings(guild_id)
+            return settings.get("welcome_settings", {
+                'enabled': False,
+                'channel_id': None
+            })
+        except Exception as e:
+            logger.error(f"Error getting welcome settings: {e}")
+            return {
+                'enabled': False,
+                'channel_id': None
+            }
+
+    async def set_welcome_settings(self, guild_id: int, enabled: bool, channel_id: Optional[int] = None):
+        """Set welcome settings for a guild"""
+        try:
+            settings = await self.get_server_settings(guild_id)
+            settings["welcome_settings"] = {
+                'enabled': enabled,
+                'channel_id': channel_id
+            }
+            await self.update_server_settings(guild_id, settings)
+        except Exception as e:
+            logger.error(f"Error setting welcome settings: {e}")
