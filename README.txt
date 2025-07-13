@@ -107,6 +107,8 @@ The bot provides slash commands:
   
 - `/trigger <action: Add/Remove/List> <option: word>` - Server-specific trigger word management
 
+- `/welcome <channel> <status: Enable/Disable>` - Welcome message management
+
 ### Prefix Commands
 The bot using Shapes API prefix commands
 
@@ -127,7 +129,7 @@ The bot using Shapes API prefix commands
 - Channel Modes
 - Bot talks to Bot
 - Trigger Words: The bot will respond to messages containing trigger words defined in the `.env` file (global) or using `/trigger` (server-specific)
-- Custom Bot Status, Reply Style, Error Message
+- Revival chat & Welcomer chat
 
 ## Troubleshooting
 
