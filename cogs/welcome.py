@@ -146,20 +146,8 @@ class WelcomeCog(commands.Cog):
                 logger.error("Shapes API key not found")
                 return self._get_fallback_message(member)
             
-            # Load persona from persona.txt
-            persona = ""
-            try:
-                with open('persona.txt', 'r', encoding='utf-8') as f:
-                    persona = f.read().strip()
-            except FileNotFoundError:
-                logger.warning("persona.txt not found, using default personality")
-                persona = "You are a friendly and welcoming Discord bot."
-            except Exception as e:
-                logger.error(f"Error reading persona.txt: {e}")
-                persona = "You are a friendly and welcoming Discord bot."
-            
             # Create prompt for welcome message
-            prompt = f"""{persona}
+            prompt = f"""
 
 Generate a welcome message for a new member who just joined a Discord server.
 
