@@ -69,12 +69,13 @@
    - Server Members Intent
    - Message Content Intent
 4. Generate an invite link with the following permissions:
-   - Read Messages/View Channels
+   - View Channels
    - Send Messages
    - Send Messages in Threads
    - Read Message History
    - Attach Files
    - Embed Links
+   - Mention @everyone, @here and All Roles (for revival chat function)
 5. Invite the bot to your server using the generated link
 
 ## Usage
