@@ -30,7 +30,7 @@
    #=========CUSTOMIZE=========
    ## Discord Bot Configuration
    BOT_OWNER=              # your user ID, used for permission to block bot responding to someone
-   REPLY_STYLE=            # reply style configuration (1=reply with ping, 2=reply no ping, 3=direct message)
+   REPLY_STYLE=            # reply style configuration (1=reply with ping, 2=reply no ping, 3=direct message to channel)
 
    ## Shapes Bot Configuration
    TRIGGER_WORDS=          # list of words that trigger the bot to respond (comma-separated)
