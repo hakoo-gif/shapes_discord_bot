@@ -48,6 +48,18 @@
    ```
    python main.py
    ```
+   
+*You can host the Bot for free on [sillydev](https://panel.sillydev.co.uk) if you don't want to run it on your local machine.
+
+1. Create a server
+- In **Server Software Type** select `Coding Languages`
+- In **Server Software** select `Python`
+
+2. Upload the code project on your server
+
+3. In the **Startup ►** tab
+- Edit **App py file** from `app.py` to `main.py`
+- If your `main.py` is not in `/home/container/`, make sure to move code project there or update the path accordingly
 
 ## Get Shapes API Key
 
