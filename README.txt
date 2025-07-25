@@ -119,6 +119,7 @@ The bot using Shapes API prefix commands
 !sleep     - Save your conversation to long-term memory.
 !info      - Display debug information about the shape.
 !dashboard - Get a link to edit your shape on the dashboard.
+!voice     - Force voice generation for the next response (one-time override).
 !imagine   - Generate an image based on your description.
 !web       - Include results from Internet search in the response.
 
