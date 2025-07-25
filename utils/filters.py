@@ -447,7 +447,9 @@ class ResponseProcessor:
         cleaned_content = re.sub(shapes_file_pattern, '', content)
         
         # Clean up extra whitespace
-        cleaned_content = re.sub(r'\s+', ' ', cleaned_content).strip()
+        cleaned_content = re.sub(r'[ \t]+', ' ', cleaned_content)
+        cleaned_content = re.sub(r'\n{3,}', '\n\n', cleaned_content)  
+        cleaned_content = cleaned_content.strip()
         
         return cleaned_content, shapes_files
     
