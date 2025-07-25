@@ -1,14 +1,14 @@
-## WARNING: DISCORD MAY BAN YOU SINCE SHAPES API GOT BANNED FROM THEIR PLATFORM, MAKE SURE YOU LEFT NO HINT OF THE BOT IN YOUR MAIN ACCOUNT (YOU CAN CREATE BOT ON AN ALT ACC AND USE HOSTING SERVICE)
+# WARNING: SHAPES API IS BANNED FROM DISCORD, YOUR ACCOUNT MAY BE AT RISK IF DISCORD DETECTS THAT YOUR BOT IS USING SHAPES API
 
-## Setup Instructions
+# Setup Instructions
 
-### Prerequisites
+## Prerequisites
 
 - Python 3.8 or higher
 - A Discord bot token (create one at https://discord.com/developers/applications)
 - A Shapes API key and Shape username (obtain from https://shapes.inc)
 
-### Installation Steps
+## Installation Steps
 
 1. Clone or download this repository to your local machine.
 
@@ -17,7 +17,7 @@
    pip install -r requirements.txt
    ```
 
-3. Create a `.env` file in the root directory with the following content:
+3. Create a `.env` file (or rename the `.env.example` file) in the root directory with the following content:
    ```
    #=========REQUIRED=========
    ## Discord Bot Configuration
@@ -42,7 +42,7 @@
    ACTIVITY_MESSAGE=       # text displayed in the bot's activity status
    ```
 
-4. Replace the placeholder values with your actual Discord token, User ID, Shapes API key, and Shape username.
+4. Replace the placeholder values with your actual Discord Bot token, Shapes API key, and Shape username.
 
 5. Run the bot:
    ```
@@ -78,14 +78,14 @@
    - Mention @everyone, @here and All Roles (for revival chat function)
 5. Invite the bot to your server using the generated link
 
-## Usage
+# Usage
 
-### Basic Interaction
+## Basic Interaction
 - Send a direct message to the bot to start a private conversation
 - Mention the bot (@BotName) in a server channel to get a response
 - Reply to one of the bot's messages to continue a conversation
 
-### Slash Commands
+## Slash Commands
 The bot provides slash commands:
   
 - `/auth <option: action>` - Authenticate with Shapes API or remove authentication
@@ -110,9 +110,9 @@ The bot provides slash commands:
 
 - `/welcome <channel> <status: Enable/Disable>` - Select ⁠channel to send welcome message when new members join
 
-### Prefix Commands
+## Prefix Commands
 The bot using Shapes API prefix commands
-
+```
 !help      - Display a list of available commands and their descriptions.
 !wack      - Reset conversation history with the shape.
 !reset     - Completely reset the shape's memory and conversation history.
@@ -122,8 +122,9 @@ The bot using Shapes API prefix commands
 !voice     - Force voice generation for the next response (one-time override).
 !imagine   - Generate an image based on your description.
 !web       - Include results from Internet search in the response.
+```
 
-### Capabilities
+## Capabilities
 - AI chat: Responds to messages using Shapes Inc
 - Contextual Replies
 - Auth to link user personal/memories
