@@ -67,11 +67,11 @@
 2. Generate API Key
 3. Copy API Key and paste to .env
 
-## Get SHAPE_USERNAME
+## Get SHAPES_USERNAME
 
 1. Go to https://shapes.inc/explore
 2. Select the shape
-3. SHAPES_USERNAME is the vanity name after https://shapes.inc/ (eg: SHAPE_USERNAME of https://shapes.inc/tenshi is tenshi)
+3. SHAPES_USERNAME is the vanity name after https://shapes.inc/ (eg: SHAPES_USERNAME of https://shapes.inc/tenshi is tenshi)
 
 ## Discord Bot Setup
 
