@@ -76,7 +76,7 @@ class ReviveChatCog(commands.Cog):
                         await self._start_scheduler(
                             guild.id,
                             settings['channel_id'],
-                            settings['role_id'],
+                            settings.get('role_id'),
                             settings['interval_minutes'],
                             settings.get('next_send_time')
                         )
@@ -141,7 +141,7 @@ class ReviveChatCog(commands.Cog):
         """Generate revive chat message using AI or fallback"""
         try:
             # Prepare prompt for AI
-            prompt = "Chat’s dead. Say one short, natural line (in your tone) that could spark someone to reply — not like a mod or QOTD."
+            prompt = "Chat's been quiet for a while. Write a short and casual message that sounds like you're bored and trying to get your friend to reply. Keep it natural and true to your personality."
             
             messages = [{"role": "user", "content": prompt}]
             
@@ -186,7 +186,7 @@ class ReviveChatCog(commands.Cog):
         # Fallback to random message
         return random.choice(self.fallback_messages)
     
-    async def _send_revive_message(self, guild_id: int, channel_id: int, role_id: int):
+    async def _send_revive_message(self, guild_id: int, channel_id: int, role_id: Optional[int]):
         """Send a revive chat message"""
         try:
             guild = self.bot.get_guild(guild_id)
@@ -199,10 +199,11 @@ class ReviveChatCog(commands.Cog):
                 logger.error(f"Channel {channel_id} not found in guild {guild_id}")
                 return False
             
-            role = guild.get_role(role_id)
-            if not role:
-                logger.error(f"Role {role_id} not found in guild {guild_id}")
-                return False
+            role = None
+            if role_id:
+                role = guild.get_role(role_id)
+                if not role:
+                    logger.warning(f"Role {role_id} not found in guild {guild_id}, continuing without role ping")
             
             # Check bot permissions
             bot_member = guild.get_member(self.bot.user.id)
@@ -238,8 +239,11 @@ class ReviveChatCog(commands.Cog):
                     message_content = random.choice(self.fallback_messages)
                     break
             
-            # Send message with role ping
-            final_message = f"{message_content} {role.mention}"
+            # Send message with optional role ping
+            if role:
+                final_message = f"{message_content} {role.mention}"
+            else:
+                final_message = message_content
             
             await channel.send(final_message)
             logger.info(f"Sent revive chat message to {guild.name} #{channel.name}")
@@ -252,7 +256,7 @@ class ReviveChatCog(commands.Cog):
             logger.error(f"Error sending revive message: {e}")
             return False
     
-    async def _start_scheduler(self, guild_id: int, channel_id: int, role_id: int, 
+    async def _start_scheduler(self, guild_id: int, channel_id: int, role_id: Optional[int], 
                              interval_minutes: int, next_send_time: Optional[str] = None):
         """Start the scheduler for a guild"""
         scheduler_key = f"{guild_id}_{channel_id}"
@@ -269,7 +273,7 @@ class ReviveChatCog(commands.Cog):
         
         logger.info(f"Started revive chat scheduler for guild {guild_id}, channel {channel_id}")
     
-    async def _scheduler_loop(self, guild_id: int, channel_id: int, role_id: int, 
+    async def _scheduler_loop(self, guild_id: int, channel_id: int, role_id: Optional[int], 
                             interval_minutes: int, next_send_time: Optional[str] = None):
         """Main scheduler loop"""
         try:
@@ -329,9 +333,9 @@ class ReviveChatCog(commands.Cog):
     @app_commands.command(name="revivechat", description="Manage automated revive chat messages")
     @app_commands.describe(
         action="Action to perform",
-        channel="Channel to send revive messages (required for enable)",
-        role="Role to ping in revive messages (required for enable)", 
-        interval="Time interval (e.g., '1h', '2h30m', '45m') - max 24h (required for enable)"
+        channel="Channel to send revive messages (defaults to current channel)",
+        role="Role to ping in revive messages (optional)", 
+        interval="Time interval (e.g., '1h', '2h30m', '45m') - defaults to 24h"
     )
     @app_commands.choices(action=[
         app_commands.Choice(name="enable", value="enable"),
@@ -369,49 +373,37 @@ class ReviveChatCog(commands.Cog):
         
         try:
             if action == "enable":
-                # Validate required parameters
+                # Use current channel if not specified
                 if not channel:
-                    embed = discord.Embed(
-                        title="❌ Missing Parameter",
-                        description="Channel parameter is required for enabling revive chat.",
-                        color=discord.Color.red()
-                    )
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
-                    return
+                    channel = interaction.channel
+                    if not isinstance(channel, discord.TextChannel):
+                        embed = discord.Embed(
+                            title="❌ Invalid Channel",
+                            description="This command must be used in a text channel or you must specify a text channel.",
+                            color=discord.Color.red()
+                        )
+                        await interaction.response.send_message(embed=embed, ephemeral=True)
+                        return
                 
-                if not role:
-                    embed = discord.Embed(
-                        title="❌ Missing Parameter",
-                        description="Role parameter is required for enabling revive chat.",
-                        color=discord.Color.red()
-                    )
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
-                    return
-                
+                # Use default interval if not specified (24 hours = 1440 minutes)
                 if not interval:
-                    embed = discord.Embed(
-                        title="❌ Missing Parameter",
-                        description="Interval parameter is required for enabling revive chat.",
-                        color=discord.Color.red()
-                    )
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
-                    return
-                
-                # Parse interval
-                interval_minutes = self._parse_time_format(interval)
-                if interval_minutes is None:
-                    embed = discord.Embed(
-                        title="❌ Invalid Time Format",
-                        description="Use formats like `1h`, `2h30m`, or `45m`. Maximum 24 hours.",
-                        color=discord.Color.red()
-                    )
-                    embed.add_field(
-                        name="Examples",
-                        value="`30m` - 30 minutes\n`1h` - 1 hour\n`2h15m` - 2 hours 15 minutes",
-                        inline=False
-                    )
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
-                    return
+                    interval_minutes = 1440  # 24 hours
+                else:
+                    # Parse interval
+                    interval_minutes = self._parse_time_format(interval)
+                    if interval_minutes is None:
+                        embed = discord.Embed(
+                            title="❌ Invalid Time Format",
+                            description="Use formats like `1h`, `2h30m`, or `45m`. Maximum 24 hours.",
+                            color=discord.Color.red()
+                        )
+                        embed.add_field(
+                            name="Examples",
+                            value="`30m` - 30 minutes\n`1h` - 1 hour\n`2h15m` - 2 hours 15 minutes",
+                            inline=False
+                        )
+                        await interaction.response.send_message(embed=embed, ephemeral=True)
+                        return
                 
                 # Check bot permissions in target channel
                 bot_member = interaction.guild.get_member(self.bot.user.id)
@@ -434,9 +426,9 @@ class ReviveChatCog(commands.Cog):
                     await interaction.response.send_message(embed=embed, ephemeral=True)
                     return
                 
-                # Check if role is mentionable or bot has 'Mention @everyone, @here, and All Roles' permission
+                # Check if role is mentionable or bot has 'Mention @everyone, @here, and All Roles' permission (only if role is specified)
                 warning_message = None
-                if not role.mentionable and not bot_member.guild_permissions.mention_everyone:
+                if role and not role.mentionable and not bot_member.guild_permissions.mention_everyone:
                     warning_message = f"⚠️ **Warning:** Role {role.mention} is not mentionable and I don't have the 'Mention @everyone, @here, and All Roles' permission. The role ping may not work as expected."
                 
                 # Save settings
@@ -444,7 +436,7 @@ class ReviveChatCog(commands.Cog):
                 server_settings['revive_chat'] = {
                     'enabled': True,
                     'channel_id': channel.id,
-                    'role_id': role.id,
+                    'role_id': role.id if role else None,
                     'interval_minutes': interval_minutes,
                     'next_send_time': None
                 }
@@ -455,7 +447,7 @@ class ReviveChatCog(commands.Cog):
                 await self._start_scheduler(
                     interaction.guild.id,
                     channel.id,
-                    role.id,
+                    role.id if role else None,
                     interval_minutes
                 )
                 
@@ -466,7 +458,7 @@ class ReviveChatCog(commands.Cog):
                     color=discord.Color.green()
                 )
                 embed.add_field(name="Channel", value=channel.mention, inline=True)
-                embed.add_field(name="Role", value=role.mention, inline=True)
+                embed.add_field(name="Role", value=role.mention if role else "None", inline=True)
                 embed.add_field(name="Interval", value=interval_display, inline=True)
                 
                 # Warning if role mention might not work
@@ -535,10 +527,11 @@ class ReviveChatCog(commands.Cog):
                 
                 # Get channel and role info
                 channel = interaction.guild.get_channel(settings.get('channel_id'))
-                role = interaction.guild.get_role(settings.get('role_id'))
+                role_id = settings.get('role_id')
+                role = interaction.guild.get_role(role_id) if role_id else None
                 
                 channel_mention = channel.mention if channel else f"<#{settings.get('channel_id')} (deleted)>"
-                role_mention = role.mention if role else f"<@&{settings.get('role_id')}> (deleted)"
+                role_mention = role.mention if role else ("None" if role_id is None else f"<@&{role_id}> (deleted)")
                 
                 interval_display = self._format_time_display(settings.get('interval_minutes', 60))
                 
