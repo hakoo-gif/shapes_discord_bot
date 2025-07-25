@@ -52,14 +52,14 @@
 ### You can host the Bot for free on [sillydev](https://panel.sillydev.co.uk) if you don't want to run it on your local machine.
 
 1. Create a server
-- In **Server Software Type** select `Coding Languages`
-- In **Server Software** select `Python`
+   - In **Server Software Type** select `Coding Languages`
+   - In **Server Software** select `Python`
 
 2. Upload the code project on your server
 
 3. In the **Startup ►** tab
-- Edit **App py file** from `app.py` to `main.py`
-- If your `main.py` is not in `/home/container/`, make sure to move code project there or update the path accordingly
+   - Edit **App py file** from `app.py` to `main.py`
+   - If your `main.py` is not in `/home/container/`, make sure to move code project there or update the path accordingly
 
 ## Get Shapes API Key
 
@@ -151,4 +151,4 @@ The bot using Shapes API prefix commands
 - **Bot not responding**: Ensure you've set up the correct permissions and intents
 - **API errors**: Check your Shapes API key and username
 - **Rate limiting**: The bot will inform you if it's being rate limited by the API
-- **Logging**: Check the logs directory for detailed information about any errors
+- **Logging**: Check the logs for detailed information about any errors
