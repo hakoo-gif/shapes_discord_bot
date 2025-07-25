@@ -49,7 +49,7 @@
    python main.py
    ```
    
-*You can host the Bot for free on [sillydev](https://panel.sillydev.co.uk) if you don't want to run it on your local machine.
+### You can host the Bot for free on [sillydev](https://panel.sillydev.co.uk) if you don't want to run it on your local machine.
 
 1. Create a server
 - In **Server Software Type** select `Coding Languages`
