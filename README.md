@@ -1,3 +1,5 @@
+# * SHAPES API HAS BEEN DISABLED SO THIS PROJECT WILL NOT WORKING ANYMORE
+
 # WARNING: SHAPES API IS BANNED FROM DISCORD, YOUR ACCOUNT MAY BE AT RISK IF DISCORD DETECTS THAT YOUR BOT IS USING SHAPES API
 
 # Setup Instructions
@@ -152,3 +154,4 @@ The bot using Shapes API prefix commands
 - **API errors**: Check your Shapes API key and username
 - **Rate limiting**: The bot will inform you if it's being rate limited by the API
 - **Logging**: Check the logs for detailed information about any errors
+
